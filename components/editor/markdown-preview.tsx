@@ -15,6 +15,17 @@ const HEADING = /^(#{1,3})\s+(.*)$/
 const BULLET = /^[-*]\s+(.*)$/
 const NUMBERED = /^\d+[.)]\s+(.*)$/
 
+// 28 / 22 / 18 against 14px body copy. The steps are wide on purpose: at the
+// old 18 / 16 spacing a heading sat too close to the paragraph under it to
+// break the page up, so a long draft read as one unbroken column. Each level
+// also takes more air above it than the one below, which is what makes a
+// subsection read as belonging to the section it follows.
+const HEADING_STYLES: Record<1 | 2 | 3, string> = {
+  1: "mt-8 text-2xl tracking-tight",
+  2: "mt-6 text-xl tracking-tight",
+  3: "mt-3 text-base",
+}
+
 function parse(markdown: string): Block[] {
   const blocks: Block[] = []
   let paragraph: string[] = []
@@ -134,11 +145,8 @@ export function MarkdownPreview({
               <Tag
                 key={key}
                 className={cn(
-                  "font-heading font-medium",
-                  // 18 / 16 / 14 against 14px body copy, off the rescaled steps.
-                  block.level === 3
-                    ? "mt-2 text-sm"
-                    : "mt-4 text-base first:mt-0"
+                  "font-heading font-medium first:mt-0",
+                  HEADING_STYLES[block.level]
                 )}
               >
                 {inline(block.text, key)}

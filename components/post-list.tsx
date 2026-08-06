@@ -25,6 +25,11 @@ import { PlatformGlyph } from "@/components/editor/platform-glyph"
 import { orderPlatformIds, PLATFORMS, platformNames } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
 
+// Every control on the filter row is set to one height, so the row reads as a
+// single band rather than as buttons of assorted sizes. The boxed status
+// control ends up taller by its own padding and border, as it did before.
+const CONTROL_HEIGHT = "h-9"
+
 type StatusFilter = "all" | "Draft" | "Published"
 /** With more than one platform picked: published to any of them, or to all. */
 type PlatformMatch = "any" | "all"
@@ -63,7 +68,7 @@ function FilterTrigger({
       render={
         <Button
           type="button"
-          size="sm"
+          className={CONTROL_HEIGHT}
           variant={active ? "secondary" : "outline"}
         />
       }
@@ -205,7 +210,7 @@ export function PostList({
             <Button
               key={value}
               type="button"
-              size="sm"
+              className={CONTROL_HEIGHT}
               variant={status === value ? "secondary" : "ghost"}
               aria-pressed={status === value}
               onClick={() => setStatus(value)}
@@ -288,7 +293,13 @@ export function PostList({
         {/* Not a filter — nothing is hidden by it — so it never reads as set. */}
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button type="button" size="sm" variant="outline" />}
+            render={
+              <Button
+                type="button"
+                className={CONTROL_HEIGHT}
+                variant="outline"
+              />
+            }
           >
             {SORTS.find((option) => option.value === sort)?.label}
             <ChevronDown />
@@ -312,7 +323,7 @@ export function PostList({
           <>
             <Button
               type="button"
-              size="sm"
+              className={CONTROL_HEIGHT}
               variant="ghost"
               onClick={clearFilters}
             >
@@ -333,7 +344,7 @@ export function PostList({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search titles"
             aria-label="Search posts by title"
-            className="w-52 pl-7"
+            className={cn(CONTROL_HEIGHT, "w-52 pl-7")}
           />
         </div>
       </div>
@@ -348,7 +359,15 @@ export function PostList({
           <span className="w-20 shrink-0 text-right">Updated</span>
         </div>
 
-        <CardContent className="min-h-0 overflow-y-auto px-0">
+        {/* `relative` is load-bearing: the rows carry `sr-only` labels, which
+            are absolutely positioned. Without a positioned ancestor they
+            resolve against the viewport instead, and an absolute box is only
+            clipped by ancestors in its containing-block chain — so they escape
+            the overflow-hidden wrappers, sit at their static offsets far down
+            the list, and stretch the document itself rather than this box.
+            overscroll-contain then keeps a scroll past the last row from
+            chaining outward. */}
+        <CardContent className="relative min-h-0 overflow-y-auto overscroll-contain px-0">
           {visible.length ? (
             <ul className="divide-y divide-foreground/10">
               {visible.map((post) => (

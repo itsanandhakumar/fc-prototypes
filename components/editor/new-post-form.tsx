@@ -55,6 +55,7 @@ export function NewPostForm() {
           value={keywords}
           onChange={(event) => setKeywords(event.target.value)}
           placeholder="anchor text, orphan pages, crawl depth"
+          className="h-9"
         />
         <Hint>Separate with commas — each one gets its own section.</Hint>
       </div>
