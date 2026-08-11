@@ -23,6 +23,13 @@ import { slugify } from "@/lib/slug"
 // shows what is about to happen and gets out of the way. Writing a post *about*
 // the post — shorter, per network — is Social Studio's job, not this one's.
 
+// The value wraps rather than truncates. An address is a long unbroken token
+// whose tail — the slug — is the part worth reading, so an ellipsis would hide
+// exactly what the writer is checking. `wrap-anywhere` also drops the value's
+// min-content width to a single character, which is what keeps the box inside
+// the dialog: DialogContent is a grid, and a grid item's `min-width: auto`
+// resolves to its min-content width, so one unbreakable string is enough to
+// push the whole track past the dialog's max width.
 function Detail({
   label,
   children,
@@ -33,7 +40,9 @@ function Detail({
   return (
     <div className="flex items-baseline justify-between gap-4">
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-xs font-medium">{children}</span>
+      <span className="min-w-0 text-right text-xs font-medium wrap-anywhere">
+        {children}
+      </span>
     </div>
   )
 }
@@ -81,7 +90,7 @@ export function PublishDialog({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           {connected ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex min-w-0 flex-col gap-4">
               <DialogHeader>
                 <DialogTitle>Publish to {HUBSPOT.name}</DialogTitle>
                 <DialogDescription>
@@ -140,7 +149,7 @@ export function PublishDialog({
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className="flex min-w-0 flex-col gap-4">
               <DialogHeader>
                 <DialogTitle>Connect {HUBSPOT.name} to publish</DialogTitle>
                 <DialogDescription>
