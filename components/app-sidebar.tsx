@@ -1,0 +1,54 @@
+import Link from "next/link"
+import { cookies } from "next/headers"
+
+import { BrandLockup } from "@/components/brand-lockup"
+import { SettingsButton } from "@/components/settings-button"
+import { SidebarNav } from "@/components/sidebar-nav"
+import { ACCOUNTS, SESSION_COOKIE } from "@/lib/auth"
+import { CONNECTORS_COOKIE, parseConnectedIds } from "@/lib/connectors"
+import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
+
+// The frame the whole suite hangs off: the company at the top, its products in
+// the middle, the account at the foot. Blogger is one of the products rather
+// than the whole application, which is what the mark up here now says.
+export async function AppSidebar() {
+  const cookieStore = await cookies()
+  const email = cookieStore.get(SESSION_COOKIE)?.value ?? ""
+  const defaultBodyView = parseBodyView(
+    cookieStore.get(BODY_VIEW_COOKIE)?.value
+  )
+  const connectedIds = parseConnectedIds(
+    cookieStore.get(CONNECTORS_COOKIE)?.value
+  )
+
+  return (
+    <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      {/* Same height as the breadcrumb bar beside it, so the two top edges
+          read as one line across the window. */}
+      <div className="flex h-12 shrink-0 items-center px-3">
+        <Link
+          href="/dashboard"
+          aria-label="Forward"
+          className="flex items-center rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          <BrandLockup
+            variant="mark"
+            name="Forward"
+            className="text-sm font-medium [&_svg]:h-[1.37em]"
+          />
+        </Link>
+      </div>
+
+      <SidebarNav />
+
+      <div className="shrink-0 border-t border-sidebar-border p-2">
+        <SettingsButton
+          defaultBodyView={defaultBodyView}
+          connectedIds={connectedIds}
+          accounts={ACCOUNTS}
+          currentEmail={email}
+        />
+      </div>
+    </aside>
+  )
+}

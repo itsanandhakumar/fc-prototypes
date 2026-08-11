@@ -11,8 +11,6 @@ export type BlogPost = {
   status: PostStatus
   updatedMinutesAgo: number
   body: string
-  /** Platform ids this post was shared to, if any. */
-  publishedTo?: string[]
   /** The instructions this draft was written from, kept so the editor can
       always show how the post was made. */
   brief?: DraftBrief
@@ -213,47 +211,11 @@ function withSections(post: BlogPost, index: number): BlogPost {
   const sections =
     firstHeading === -1 ? "" : generated.slice(firstHeading).trim()
 
-  // Anything published went somewhere; drafts have gone nowhere.
-  const publishedTo =
-    post.status === "Published"
-      ? [["linkedin", "x"], ["linkedin"], ["x"]][index % 3]
-      : []
-
   return {
     ...post,
     body: [post.body, sections].filter(Boolean).join("\n\n"),
-    publishedTo,
     brief,
   }
 }
 
 export const blogPosts: BlogPost[] = SEED_POSTS.map(withSections)
-
-const MINUTES_PER_HOUR = 60
-const MINUTES_PER_DAY = 60 * 24
-const MINUTES_PER_WEEK = MINUTES_PER_DAY * 7
-const MINUTES_PER_MONTH = MINUTES_PER_DAY * 30
-
-// Compact relative time, e.g. "25m ago", "Yesterday", "2wks ago".
-export function formatRelativeTime(minutesAgo: number): string {
-  if (minutesAgo < 1) {
-    return "Just now"
-  }
-  if (minutesAgo < MINUTES_PER_HOUR) {
-    return `${minutesAgo}m ago`
-  }
-  if (minutesAgo < MINUTES_PER_DAY) {
-    return `${Math.round(minutesAgo / MINUTES_PER_HOUR)}h ago`
-  }
-  if (minutesAgo < MINUTES_PER_DAY * 2) {
-    return "Yesterday"
-  }
-  if (minutesAgo < MINUTES_PER_WEEK) {
-    return `${Math.round(minutesAgo / MINUTES_PER_DAY)}d ago`
-  }
-  if (minutesAgo < MINUTES_PER_WEEK * 8) {
-    const weeks = Math.round(minutesAgo / MINUTES_PER_WEEK)
-    return `${weeks}wk${weeks === 1 ? "" : "s"} ago`
-  }
-  return `${Math.round(minutesAgo / MINUTES_PER_MONTH)}mo ago`
-}

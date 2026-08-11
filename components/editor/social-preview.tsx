@@ -129,36 +129,86 @@ function LinkCard({
   )
 }
 
+/** What a published post actually did. Absent while it is being written, or
+    for a draft or a scheduled post — none of which have been seen by anyone. */
+export type PreviewMetrics = {
+  impressions: number
+  likes: number
+  comments: number
+  reposts: number
+}
+
+/** Thousands separators without `toLocaleString`, whose grouping depends on the
+    runtime's locale — server and browser need not agree, and a mismatch here
+    would be a hydration error. */
+function compact(value: number): string {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+}
+
 // LinkedIn is the only one of these that shows reaction chips above the
-// actions; everywhere else the counts sit on the actions themselves.
-function Reactions({ platform }: { platform: Platform }) {
+// actions; everywhere else the counts sit on the actions themselves. Either
+// way the figures come from the post, so an unpublished one shows none.
+function Reactions({
+  platform,
+  metrics,
+}: {
+  platform: Platform
+  metrics?: PreviewMetrics
+}) {
   const { chrome } = platform.preview
-  if (!chrome.reactions) {
+
+  if (!chrome.reactions || !metrics) {
+    return null
+  }
+
+  const reacted = metrics.likes + metrics.reposts
+  if (reacted === 0 && metrics.comments === 0) {
     return null
   }
 
   return (
     <div className={cn("flex items-center gap-1.5 text-xs", chrome.meta)}>
-      <span className="flex items-center -space-x-1">
-        <span
-          className="flex size-4 items-center justify-center rounded-full text-white ring-1 ring-white dark:ring-black"
-          style={{ backgroundColor: chrome.accent }}
-        >
-          <ThumbsUp className="size-2.5" />
+      {reacted > 0 ? (
+        <>
+          <span className="flex items-center -space-x-1">
+            <span
+              className="flex size-4 items-center justify-center rounded-full text-white ring-1 ring-white dark:ring-black"
+              style={{ backgroundColor: chrome.accent }}
+            >
+              <ThumbsUp className="size-2.5" />
+            </span>
+            <span className="flex size-4 items-center justify-center rounded-full bg-[#DF704D] text-white ring-1 ring-white dark:ring-black">
+              <Heart className="size-2.5" />
+            </span>
+          </span>
+          <span>{compact(reacted)}</span>
+        </>
+      ) : null}
+      {/* Wrapped rather than bare text: two adjacent text nodes collapse into
+          one anonymous flex item, and the row's gap would not fall between
+          them. */}
+      {metrics.comments > 0 ? (
+        <span>
+          {reacted > 0 ? "· " : ""}
+          {compact(metrics.comments)} comment
+          {metrics.comments === 1 ? "" : "s"}
         </span>
-        <span className="flex size-4 items-center justify-center rounded-full bg-[#DF704D] text-white ring-1 ring-white dark:ring-black">
-          <Heart className="size-2.5" />
-        </span>
-      </span>
-      {chrome.reactions}
+      ) : null}
     </div>
   )
 }
 
-function ActionRow({ platform }: { platform: Platform }) {
+function ActionRow({
+  platform,
+  metrics,
+}: {
+  platform: Platform
+  metrics?: PreviewMetrics
+}) {
   const { actions, chrome } = platform.preview
-  // Labelled actions read as a row of buttons; bare counts sit closer together.
-  const labelled = actions.every((action) => action.label.length > 2)
+  // Networks that put counts on their actions carry a metric per action;
+  // the ones that put words there do not.
+  const labelled = actions.every((action) => !action.metric)
 
   return (
     <div
@@ -170,10 +220,14 @@ function ActionRow({ platform }: { platform: Platform }) {
     >
       {actions.map((action, index) => {
         const Icon = ACTION_ICONS[action.icon]
+        // A count slot stays empty until the post has been out and earned one.
+        const count =
+          action.metric && metrics ? compact(metrics[action.metric]) : ""
+
         return (
           <span key={index} className="flex items-center gap-1.5">
             <Icon className="size-3.5" />
-            {action.label}
+            {action.metric ? count : action.label}
           </span>
         )
       })}
@@ -186,11 +240,15 @@ export function SocialPreview({
   text,
   title,
   attachments,
+  metrics,
 }: {
   platform: Platform
   text: string
   title: string
   attachments: Attachment[]
+  /** Only a published post has these. Without them the card shows no
+      engagement at all, which is the truth for anything still being written. */
+  metrics?: PreviewMetrics
 }) {
   const { truncateAt, chrome } = platform.preview
   const url = URL_PATTERN.exec(text)?.[0]
@@ -265,11 +323,11 @@ export function SocialPreview({
         <LinkCard platform={platform} url={url} title={title} />
       ) : null}
 
-      <Reactions platform={platform} />
+      <Reactions platform={platform} metrics={metrics} />
 
       <div className={cn("h-px w-full", chrome.divider)} />
 
-      <ActionRow platform={platform} />
+      <ActionRow platform={platform} metrics={metrics} />
     </div>
   )
 }

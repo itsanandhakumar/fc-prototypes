@@ -4,6 +4,7 @@ import * as React from "react"
 import { Plus } from "lucide-react"
 
 import { connectPlatform, disconnectPlatform } from "@/app/connector-actions"
+import { PlatformGlyph } from "@/components/editor/platform-glyph"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,44 +12,111 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { PLATFORMS } from "@/lib/connectors"
+import {
+  BLOG_DESTINATIONS,
+  PLATFORMS,
+  SOCIAL_PLATFORM_IDS,
+} from "@/lib/connectors"
 
-// Only what is actually connected is listed; anything else is behind the add
-// button, so the list reads as this account's connections rather than a
-// catalogue.
-export function ConnectorList({ connectedIds }: { connectedIds: string[] }) {
-  const [pending, startPending] = React.useTransition()
+// The two kinds of connection are kept apart because they belong to different
+// products: the blog publishes to a CMS, Social Studio posts to networks. A
+// flat list made it look like any of them could receive any of the work.
 
-  const connected = PLATFORMS.filter((platform) =>
-    connectedIds.includes(platform.id)
-  )
-  const available = PLATFORMS.filter(
-    (platform) => !connectedIds.includes(platform.id)
+type Kind = "blog" | "social"
+
+/** Both kinds flattened to what the list actually draws. */
+type Connection = { id: string; name: string; subtitle: string }
+
+const GROUPS: Array<{ kind: Kind; heading: string; hint: string }> = [
+  {
+    kind: "blog",
+    heading: "Blog",
+    hint: "Where a published post goes.",
+  },
+  {
+    kind: "social",
+    heading: "Social",
+    hint: "Where Social Studio posts.",
+  },
+]
+
+function connectionsOf(kind: Kind): Connection[] {
+  if (kind === "blog") {
+    return BLOG_DESTINATIONS.map((destination) => ({
+      id: destination.id,
+      name: destination.name,
+      subtitle: destination.account,
+    }))
+  }
+
+  // Only what Social Studio actually offers. Connecting one of the others
+  // would leave an account attached to nothing that can post to it.
+  return PLATFORMS.filter((platform) =>
+    SOCIAL_PLATFORM_IDS.includes(platform.id)
+  ).map((platform) => ({
+    id: platform.id,
+    name: platform.name,
+    subtitle: platform.handle,
+  }))
+}
+
+function ConnectorGroup({
+  heading,
+  hint,
+  connections,
+  connectedIds,
+  pending,
+  onConnect,
+  onDisconnect,
+}: {
+  heading: string
+  hint: string
+  connections: Connection[]
+  connectedIds: string[]
+  pending: boolean
+  onConnect: (id: string) => void
+  onDisconnect: (id: string) => void
+}) {
+  const connected = connections.filter((item) => connectedIds.includes(item.id))
+  const available = connections.filter(
+    (item) => !connectedIds.includes(item.id)
   )
 
   return (
-    <div className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-xs font-medium">{heading}</h3>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+
+      {/* Only what is actually connected is listed; anything else is behind
+          the add button, so the group reads as this account's connections
+          rather than a catalogue. */}
       {connected.length ? (
         <ul className="flex flex-col gap-2">
-          {connected.map((platform) => (
+          {connected.map((item) => (
             <li
-              key={platform.id}
+              key={item.id}
               className="flex items-center justify-between gap-3 rounded-md border border-border px-2.5 py-2"
             >
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-xs font-medium">{platform.name}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {platform.handle}
-                </span>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <PlatformGlyph
+                  platformId={item.id}
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-xs font-medium">{item.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {item.subtitle}
+                  </span>
+                </div>
               </div>
 
               <Button
                 type="button"
                 variant="ghost"
                 disabled={pending}
-                onClick={() =>
-                  startPending(async () => disconnectPlatform(platform.id))
-                }
+                onClick={() => onDisconnect(item.id)}
               >
                 Disconnect
               </Button>
@@ -78,22 +146,51 @@ export function ConnectorList({ connectedIds }: { connectedIds: string[] }) {
           />
 
           <DropdownMenuContent align="start" className="w-56 min-w-56">
-            {available.map((platform) => (
+            {available.map((item) => (
               <DropdownMenuItem
-                key={platform.id}
-                onClick={() =>
-                  startPending(async () => connectPlatform(platform.id))
-                }
+                key={item.id}
+                onClick={() => onConnect(item.id)}
               >
-                {platform.name}
-                <span className="ml-auto text-muted-foreground">
-                  {platform.characterLimit.toLocaleString()} characters
-                </span>
+                <PlatformGlyph platformId={item.id} />
+                {item.name}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+    </section>
+  )
+}
+
+export function ConnectorList({
+  connectedIds,
+  /** Narrows the panel to one group, for a dialog that is only about that
+      one — the editor asking for a blog has no business offering X. */
+  only,
+}: {
+  connectedIds: string[]
+  only?: Kind
+}) {
+  const [pending, startPending] = React.useTransition()
+
+  const groups = only ? GROUPS.filter((group) => group.kind === only) : GROUPS
+
+  return (
+    <div className="flex flex-col gap-5">
+      {groups.map((group) => (
+        <ConnectorGroup
+          key={group.kind}
+          heading={group.heading}
+          hint={group.hint}
+          connections={connectionsOf(group.kind)}
+          connectedIds={connectedIds}
+          pending={pending}
+          onConnect={(id) => startPending(async () => connectPlatform(id))}
+          onDisconnect={(id) =>
+            startPending(async () => disconnectPlatform(id))
+          }
+        />
+      ))}
     </div>
   )
 }

@@ -2,14 +2,7 @@
 
 import * as React from "react"
 import { useTheme } from "next-themes"
-import {
-  LogOut,
-  Palette,
-  PenLine,
-  Plug,
-  Settings,
-  UserRound,
-} from "lucide-react"
+import { LogOut, Palette, PenLine, Plug, UserRound } from "lucide-react"
 
 import { logout } from "@/app/login-actions"
 import { setDefaultBodyView } from "@/app/settings-actions"
@@ -21,7 +14,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { initialsOf, type Account } from "@/lib/auth"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
@@ -137,12 +129,18 @@ function AccountSection({
   )
 }
 
+// Controlled from the outside: the way in is the account menu at the foot of
+// the sidebar, so the dialog carries no trigger of its own.
 export function SettingsDialog({
+  open,
+  onOpenChange,
   defaultBodyView,
   connectedIds,
   accounts,
   currentEmail,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   defaultBodyView: BodyView
   connectedIds: string[]
   accounts: Account[]
@@ -156,15 +154,7 @@ export function SettingsDialog({
   const [, startSaving] = React.useTransition()
 
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="icon" aria-label="Settings">
-            <Settings />
-          </Button>
-        }
-      />
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[80vh] max-h-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle>Settings</DialogTitle>

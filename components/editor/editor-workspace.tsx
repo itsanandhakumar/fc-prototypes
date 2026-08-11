@@ -12,8 +12,8 @@ import {
 
 import { GenerationLog } from "@/components/editor/generation-log"
 import { MarkdownPreview } from "@/components/editor/markdown-preview"
-import { PostComposer } from "@/components/editor/post-composer"
 import { PostIdeas } from "@/components/editor/post-ideas"
+import { PublishDialog } from "@/components/editor/publish-dialog"
 import { TitleOptions } from "@/components/editor/title-options"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,6 @@ import {
   type GenerationStep,
 } from "@/lib/generation-steps"
 import { getInsights, type PostInsights } from "@/lib/post-insights"
-import type { Platform } from "@/lib/connectors"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
 
@@ -72,7 +71,7 @@ export function EditorWorkspace({
   brief,
   postId,
   savedPost,
-  connectedPlatforms,
+  hubspotConnected,
   steps: initialSteps = [],
   relatedPosts = [],
   generating = false,
@@ -85,7 +84,8 @@ export function EditorWorkspace({
   postId: string
   /** How this post stands in Your posts, if it is in there at all. */
   savedPost?: { id: string; title: string; status: PostStatus }
-  connectedPlatforms: Platform[]
+  /** Whether there is a connected blog to publish to. */
+  hubspotConnected: boolean
   /** What the app did to produce this draft, for the panel to narrate. */
   steps?: GenerationStep[]
   /** Titles the run cites as already covering this subject. */
@@ -335,12 +335,12 @@ export function EditorWorkspace({
           <Button type="submit" variant="outline" size="lg" disabled={running}>
             Save as draft
           </Button>
-          <PostComposer
+          <PublishDialog
             postId={postId}
             title={title}
             body={body}
             brief={{ ...brief, title }}
-            connected={connectedPlatforms}
+            connected={hubspotConnected}
             disabled={running}
           />
         </div>

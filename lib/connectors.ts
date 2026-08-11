@@ -1,6 +1,8 @@
-// Social platforms the app can post to. Connecting is mocked — there is no
-// OAuth yet — but each platform's composing rules are real, because they are
-// what makes the composer feel like the platform it is posting to.
+// The places the suite can send work. Two kinds, because they are two kinds:
+// Social Studio posts to social networks, and Blogger publishes to a CMS.
+// Connecting is mocked — there is no OAuth yet — but each social platform's
+// composing rules are real, because they are what makes the composer feel like
+// the platform it is posting to.
 
 export type AttachmentKind = "image" | "video" | "document" | "gif"
 
@@ -16,7 +18,14 @@ export type AttachmentRule = {
 // platform is one entry here rather than another branch in the preview.
 export type PreviewAction = {
   icon: "like" | "comment" | "repost" | "send" | "heart" | "views" | "bookmark"
+  /** The word on the control, where the network shows words. */
   label: string
+  /**
+   * Which figure sits beside the icon, where the network shows counts instead
+   * of words. Only filled in for a post that has actually been published —
+   * a draft has no engagement, and inventing some would make the preview lie.
+   */
+  metric?: "likes" | "comments" | "reposts" | "impressions"
 }
 
 // The preview is meant to look like the network it is previewing, so these are
@@ -43,8 +52,9 @@ export type PlatformChrome = {
   linkOrder: "title-first" | "domain-first"
   /** Whether the display name and handle share a line. */
   header: "stacked" | "inline"
-  /** A reactions line above the actions, as LinkedIn shows. */
-  reactions?: string
+  /** Whether this network shows a reactions line above the actions, as
+      LinkedIn does. The text is built from real figures, not stored. */
+  reactions?: boolean
   /** X and Threads set their mark in the card's ink, not in a brand colour. */
   glyphTint: "accent" | "ink"
 }
@@ -121,7 +131,7 @@ export const PLATFORMS: Platform[] = [
         linkOrder: "title-first",
         header: "stacked",
         glyphTint: "accent",
-        reactions: "Sam and 11 others · 4 comments",
+        reactions: true,
       },
     },
   },
@@ -145,10 +155,10 @@ export const PLATFORMS: Platform[] = [
     preview: {
       truncateAt: null,
       actions: [
-        { icon: "comment", label: "12" },
-        { icon: "repost", label: "8" },
-        { icon: "heart", label: "64" },
-        { icon: "views", label: "1.2K" },
+        { icon: "comment", label: "", metric: "comments" },
+        { icon: "repost", label: "", metric: "reposts" },
+        { icon: "heart", label: "", metric: "likes" },
+        { icon: "views", label: "", metric: "impressions" },
         { icon: "bookmark", label: "" },
       ],
       chrome: {
@@ -185,9 +195,9 @@ export const PLATFORMS: Platform[] = [
     preview: {
       truncateAt: null,
       actions: [
-        { icon: "comment", label: "6" },
-        { icon: "repost", label: "14" },
-        { icon: "heart", label: "38" },
+        { icon: "comment", label: "", metric: "comments" },
+        { icon: "repost", label: "", metric: "reposts" },
+        { icon: "heart", label: "", metric: "likes" },
       ],
       chrome: {
         accent: "#0085FF",
@@ -219,9 +229,9 @@ export const PLATFORMS: Platform[] = [
     preview: {
       truncateAt: null,
       actions: [
-        { icon: "heart", label: "41" },
-        { icon: "comment", label: "5" },
-        { icon: "repost", label: "9" },
+        { icon: "heart", label: "", metric: "likes" },
+        { icon: "comment", label: "", metric: "comments" },
+        { icon: "repost", label: "", metric: "reposts" },
         { icon: "send", label: "" },
       ],
       chrome: {
@@ -258,9 +268,9 @@ export const PLATFORMS: Platform[] = [
     preview: {
       truncateAt: null,
       actions: [
-        { icon: "comment", label: "3" },
-        { icon: "repost", label: "11" },
-        { icon: "heart", label: "27" },
+        { icon: "comment", label: "", metric: "comments" },
+        { icon: "repost", label: "", metric: "reposts" },
+        { icon: "heart", label: "", metric: "likes" },
         { icon: "bookmark", label: "" },
       ],
       chrome: {
@@ -280,12 +290,63 @@ export const PLATFORMS: Platform[] = [
   },
 ]
 
+/**
+ * What Social Studio offers, per the PRD. The registry carries more than this
+ * — bluesky, threads and mastodon are fully specified and ready — but only
+ * these are surfaced, so turning another one on is a one-line change.
+ *
+ * Substack is named in the PRD and is not here yet: it needs a full entry with
+ * its own preview chrome before it can be offered.
+ */
+export const SOCIAL_PLATFORM_IDS = ["linkedin", "x"]
+
+/**
+ * Where a blog post goes when it is published. A CMS has none of what a
+ * social platform has — no character limit, no attachment rules, no feed card
+ * to preview — so it is its own small shape rather than a Platform with the
+ * social parts left blank.
+ */
+export type BlogDestination = {
+  id: string
+  name: string
+  /** The connected portal a post would publish into. */
+  account: string
+  /** Where the published post would live. */
+  domain: string
+  /**
+   * The destination's own button colours, so the action that hands a post over
+   * looks like the thing it is handing it to. Fixed values rather than our
+   * tokens, for the same reason the social previews carry fixed ones: an orange
+   * that followed our theme would stop being HubSpot's orange.
+   */
+  button: string
+}
+
+export const HUBSPOT: BlogDestination = {
+  id: "hubspot",
+  name: "HubSpot",
+  account: "Forward Marketing · Portal 24601",
+  domain: "blog.forward.tools",
+  button:
+    "bg-[#FF7A59] text-white hover:bg-[#F2603C] focus-visible:border-[#FF7A59] focus-visible:ring-[#FF7A59]/40",
+}
+
+// One today. It stays a list because the settings panel renders it as one, and
+// because a second CMS should be an entry here rather than a new branch.
+export const BLOG_DESTINATIONS: BlogDestination[] = [HUBSPOT]
+
 export const CONNECTORS_COOKIE = "forward_connectors"
 
 export function findPlatform(id: string): Platform | undefined {
   return PLATFORMS.find((platform) => platform.id === id)
 }
 
+export function findBlogDestination(id: string): BlogDestination | undefined {
+  return BLOG_DESTINATIONS.find((destination) => destination.id === id)
+}
+
+// Both kinds share one cookie: it is the account's connections, and the
+// account does not think of them as two lists.
 export function parseConnectedIds(value: string | undefined): string[] {
   if (!value) {
     return []
@@ -293,7 +354,15 @@ export function parseConnectedIds(value: string | undefined): string[] {
   return value
     .split(",")
     .map((id) => id.trim())
-    .filter((id) => Boolean(findPlatform(id)))
+    .filter((id) => Boolean(findPlatform(id) ?? findBlogDestination(id)))
+}
+
+/** Whether the blog has somewhere to publish to. */
+export function isConnected(
+  value: string | undefined,
+  id: string = HUBSPOT.id
+): boolean {
+  return parseConnectedIds(value).includes(id)
 }
 
 // Platforms are always listed in registry order, so a post's destinations read
@@ -306,9 +375,4 @@ export function orderPlatformIds(ids: string[]): string[] {
 
 export function platformNames(ids: string[]): string[] {
   return orderPlatformIds(ids).map((id) => findPlatform(id)?.name ?? id)
-}
-
-export function connectedPlatforms(value: string | undefined): Platform[] {
-  const ids = parseConnectedIds(value)
-  return PLATFORMS.filter((platform) => ids.includes(platform.id))
 }

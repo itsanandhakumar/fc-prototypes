@@ -10,19 +10,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { formatRelativeTime, type BlogPost } from "@/lib/blog-data"
+import { type BlogPost } from "@/lib/blog-data"
+import { formatRelativeTime } from "@/lib/time"
 import { PlatformGlyph } from "@/components/editor/platform-glyph"
-import { orderPlatformIds, PLATFORMS, platformNames } from "@/lib/connectors"
+import { HUBSPOT } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
 
 // Every control on the filter row is set to one height, so the row reads as a
@@ -31,8 +29,6 @@ import { cn } from "@/lib/utils"
 const CONTROL_HEIGHT = "h-9"
 
 type StatusFilter = "all" | "Draft" | "Published"
-/** With more than one platform picked: published to any of them, or to all. */
-type PlatformMatch = "any" | "all"
 type Recency = "any" | "week" | "month" | "quarter"
 type Sort = "recent" | "oldest" | "title"
 
@@ -116,8 +112,6 @@ export function PostList({
 
   const [status, setStatus] = React.useState<StatusFilter>("all")
   const [query, setQuery] = React.useState("")
-  const [platformIds, setPlatformIds] = React.useState<string[]>([])
-  const [platformMatch, setPlatformMatch] = React.useState<PlatformMatch>("any")
   const [recency, setRecency] = React.useState<Recency>("any")
   const [sort, setSort] = React.useState<Sort>("recent")
 
@@ -135,16 +129,6 @@ export function PostList({
       }
       if (post.updatedMinutesAgo > within) {
         return false
-      }
-      if (platformIds.length) {
-        const went = post.publishedTo ?? []
-        const matches =
-          platformMatch === "all"
-            ? platformIds.every((id) => went.includes(id))
-            : platformIds.some((id) => went.includes(id))
-        if (!matches) {
-          return false
-        }
       }
       return true
     })
@@ -168,30 +152,13 @@ export function PostList({
   // Status is a segmented control with its counts on it — switching back to
   // All is the way to undo it, so Clear does not speak for it. It speaks for
   // the ones whose state is otherwise only visible in a trigger label.
-  const clearable =
-    Boolean(search) || platformIds.length > 0 || recency !== "any"
+  const clearable = Boolean(search) || recency !== "any"
   const narrowed = clearable || status !== "all"
-
-  function togglePlatform(id: string) {
-    setPlatformIds((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id]
-    )
-  }
 
   function clearFilters() {
     setQuery("")
-    setPlatformIds([])
-    setPlatformMatch("any")
     setRecency("any")
   }
-
-  const platformLabel = platformIds.length
-    ? platformIds.length > 2
-      ? `${platformIds.length} platforms`
-      : platformNames(platformIds).join(platformMatch === "all" ? " + " : " / ")
-    : "Any platform"
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-2">
@@ -220,52 +187,6 @@ export function PostList({
             </Button>
           ))}
         </div>
-
-        {/* Several at once, so these are checkboxes rather than a choice. */}
-        <DropdownMenu>
-          <FilterTrigger
-            label={platformLabel}
-            active={platformIds.length > 0}
-          />
-          <DropdownMenuContent align="start" className="w-52">
-            {/* A label is part of a group, so it is wrapped in one — Base UI
-                refuses to render it loose. */}
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Published to</DropdownMenuLabel>
-              {PLATFORMS.map((platform) => (
-                <DropdownMenuCheckboxItem
-                  key={platform.id}
-                  checked={platformIds.includes(platform.id)}
-                  onCheckedChange={() => togglePlatform(platform.id)}
-                  closeOnClick={false}
-                >
-                  {platform.name}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuGroup>
-
-            {/* Only a question once there is more than one to combine. */}
-            {platformIds.length > 1 ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuRadioGroup
-                  value={platformMatch}
-                  onValueChange={(value) =>
-                    setPlatformMatch(value as PlatformMatch)
-                  }
-                >
-                  <DropdownMenuLabel>Posts that went to</DropdownMenuLabel>
-                  <DropdownMenuRadioItem value="any" closeOnClick={false}>
-                    Any of them
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="all" closeOnClick={false}>
-                    All of them
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         <DropdownMenu>
           <FilterTrigger
@@ -352,10 +273,9 @@ export function PostList({
       <Card className="min-h-0 w-full gap-0 py-0">
         <div className="flex shrink-0 items-center gap-4 border-b px-(--card-spacing) py-2 text-xs/relaxed text-muted-foreground">
           <span className="min-w-0 flex-1">Title</span>
-          <span className="w-24 shrink-0 text-center">Status</span>
-          <span className="hidden w-28 shrink-0 text-center sm:block">
-            Published to
-          </span>
+          {/* Wide enough for the longer of the two pills, so the column holds
+              still as rows switch between them. */}
+          <span className="w-32 shrink-0 text-center">Status</span>
           <span className="w-20 shrink-0 text-right">Updated</span>
         </div>
 
@@ -385,33 +305,35 @@ export function PostList({
                     <span className="min-w-0 flex-1 truncate text-xs/relaxed font-medium">
                       {post.title}
                     </span>
-                    <span className="flex w-24 shrink-0 justify-center">
+                    {/* Where a published post went used to be its own column.
+                        With HubSpot the only destination it never varied, so
+                        the mark moved into the pill and the column went: a
+                        column that reads the same on every row is width spent
+                        on nothing. The full phrase is still said once, for
+                        anyone hovering or listening. */}
+                    <span className="flex w-32 shrink-0 justify-center">
                       <Badge
                         variant={
                           post.status === "Published" ? "secondary" : "outline"
                         }
+                        title={
+                          post.status === "Published"
+                            ? `Published to ${HUBSPOT.name}`
+                            : undefined
+                        }
                       >
-                        {post.status}
+                        {post.status === "Published" ? (
+                          <>
+                            {/* The badge sizes its own icons, so the glyph
+                                takes no class of its own here. */}
+                            <PlatformGlyph platformId={HUBSPOT.id} />
+                            Published
+                            <span className="sr-only"> to {HUBSPOT.name}</span>
+                          </>
+                        ) : (
+                          "Draft"
+                        )}
                       </Badge>
-                    </span>
-                    {/* Where it went, if anywhere. Marks rather than names:
-                        five names do not fit a column this width, and the
-                        truncation hid which ones they were. */}
-                    <span
-                      className="hidden w-28 shrink-0 items-center justify-center gap-2 text-muted-foreground sm:flex"
-                      title={platformNames(post.publishedTo ?? []).join(", ")}
-                    >
-                      {orderPlatformIds(post.publishedTo ?? []).map((id) => (
-                        <PlatformGlyph
-                          key={id}
-                          platformId={id}
-                          className="size-3.5"
-                        />
-                      ))}
-                      <span className="sr-only">
-                        {platformNames(post.publishedTo ?? []).join(", ") ||
-                          "Not published anywhere"}
-                      </span>
                     </span>
 
                     <span className="w-20 shrink-0 text-right text-xs/relaxed text-muted-foreground tabular-nums">

@@ -1,6 +1,6 @@
 import { blogPosts, type BlogPost } from "@/lib/blog-data"
-import { orderPlatformIds } from "@/lib/connectors"
 import type { DraftBrief } from "@/lib/draft-generator"
+import { slugify } from "@/lib/slug"
 
 // Prototype storage: in memory, seeded from the mock posts. Saves survive
 // navigation but reset when the dev server restarts.
@@ -30,16 +30,6 @@ export function deleteDraft(id: string): boolean {
   return true
 }
 
-function slugify(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60)
-
-  return slug || "untitled-post"
-}
-
 function uniqueId(title: string): string {
   const base = slugify(title)
   let id = base
@@ -51,19 +41,18 @@ function uniqueId(title: string): string {
   return id
 }
 
-// Publishing commits the current text and records where it went. Like saving,
-// it upserts, so a draft that has never been saved can be posted directly.
+// Publishing commits the current text to the blog. Like saving, it upserts, so
+// a draft that has never been saved can be published directly. Where it goes is
+// not recorded: HubSpot is the only destination, so "Published" already says it.
 export function publishPost({
   id,
   title,
   body,
-  platforms,
   brief,
 }: {
   id?: string
   title: string
   body: string
-  platforms: string[]
   /** The brief the draft came from, kept with the post. */
   brief?: DraftBrief
 }): BlogPost {
@@ -75,9 +64,6 @@ export function publishPost({
     body,
     status: "Published",
     updatedMinutesAgo: 0,
-    publishedTo: orderPlatformIds([
-      ...new Set([...(existing?.publishedTo ?? []), ...platforms]),
-    ]),
     brief: brief ?? existing?.brief,
   }
 

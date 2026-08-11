@@ -1,93 +1,46 @@
 import Link from "next/link"
-import { cookies } from "next/headers"
 import { ChevronRight } from "lucide-react"
-
-import { BrandLockup } from "@/components/brand-lockup"
-import { SettingsDialog } from "@/components/settings-dialog"
-import { ACCOUNTS, SESSION_COOKIE } from "@/lib/auth"
-import { CONNECTORS_COOKIE, parseConnectedIds } from "@/lib/connectors"
-import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
 
 export type Crumb = { label: string; href?: string }
 
-// One bar for every signed-in page. Opaque and sticky so content scrolling
-// underneath never shows through it.
-export async function AppHeader({
-  breadcrumbs = [],
-}: {
-  breadcrumbs?: Crumb[]
-}) {
-  const cookieStore = await cookies()
-  const email = cookieStore.get(SESSION_COOKIE)?.value ?? ""
-  const defaultBodyView = parseBodyView(
-    cookieStore.get(BODY_VIEW_COOKIE)?.value
-  )
-  const connectedIds = parseConnectedIds(
-    cookieStore.get(CONNECTORS_COOKIE)?.value
-  )
+// The trail, and nothing else. The brand sits in the sidebar now and the
+// account controls sit at its foot, so on a page with nowhere to point back to
+// there is no bar at all rather than an empty strip above the content.
+export function AppHeader({ breadcrumbs = [] }: { breadcrumbs?: Crumb[] }) {
+  if (!breadcrumbs.length) {
+    return null
+  }
 
   return (
-    <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-background px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        {/* flex, not the default inline: an inline-flex lockup would otherwise
-            hang off this anchor's text baseline instead of being centred. */}
-        <Link
-          href="/dashboard"
-          aria-label="Forward Blogger"
-          className="flex items-center"
-        >
-          {/* Mark only up here. The name is set a step up from the crumbs
-              beside it; the mark's height is em-based, so it is pinned back to
-              the size it was rather than growing with the word. */}
-          <BrandLockup
-            variant="mark"
-            className="text-[0.875rem] font-medium [&_svg]:h-[1.37em]"
-          />
-        </Link>
-
-        {breadcrumbs.length ? (
-          <nav
-            aria-label="Breadcrumb"
-            className="flex min-w-0 items-center gap-1.5 text-xs/relaxed"
+    <header className="flex h-12 shrink-0 items-center gap-4 border-b bg-background px-6">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex min-w-0 items-center gap-1.5 text-xs/relaxed"
+      >
+        {breadcrumbs.map((crumb, index) => (
+          <span
+            key={`${crumb.label}-${index}`}
+            className="flex min-w-0 items-center gap-1.5"
           >
-            {breadcrumbs.map((crumb, index) => (
-              <span
-                key={`${crumb.label}-${index}`}
-                className="flex min-w-0 items-center gap-1.5"
+            {/* Separators sit between crumbs, so the first goes without. */}
+            {index ? (
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
+            ) : null}
+            {crumb.href ? (
+              <Link
+                href={crumb.href}
+                className="truncate text-muted-foreground transition-colors hover:text-foreground"
               >
-                {/* Separators sit between crumbs. The first one follows the
-                    brand, which is a mark rather than a crumb, so it does not
-                    get one. */}
-                {index ? (
-                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" />
-                ) : null}
-                {crumb.href ? (
-                  <Link
-                    href={crumb.href}
-                    className="truncate text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    {crumb.label}
-                  </Link>
-                ) : (
-                  <span aria-current="page" className="truncate font-medium">
-                    {crumb.label}
-                  </span>
-                )}
+                {crumb.label}
+              </Link>
+            ) : (
+              <span aria-current="page" className="truncate font-medium">
+                {crumb.label}
               </span>
-            ))}
-          </nav>
-        ) : null}
-      </div>
-
-      {/* Account lives inside Settings, so the bar carries one control. */}
-      <div className="flex shrink-0 items-center">
-        <SettingsDialog
-          defaultBodyView={defaultBodyView}
-          connectedIds={connectedIds}
-          accounts={ACCOUNTS}
-          currentEmail={email}
-        />
-      </div>
+            )}
+          </span>
+        ))}
+      </nav>
     </header>
   )
 }

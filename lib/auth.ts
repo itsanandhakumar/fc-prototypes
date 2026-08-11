@@ -46,6 +46,13 @@ export function verifyCredentials(email: string, password: string) {
   return Boolean(findAccount(email)) && password === DEMO_PASSWORD
 }
 
+// What to greet someone by. The first word of the name reads the way a person
+// would say it out loud; the studio accounts are named like people here, so
+// they come out the same way.
+export function greetingNameOf(name: string): string {
+  return name.split(/\s+/).filter(Boolean)[0] ?? name
+}
+
 export function initialsOf(name: string): string {
   return name
     .split(/\s+/)

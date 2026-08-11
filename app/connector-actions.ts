@@ -6,7 +6,9 @@ import { redirect } from "next/navigation"
 
 import {
   CONNECTORS_COOKIE,
+  findBlogDestination,
   findPlatform,
+  HUBSPOT,
   parseConnectedIds,
 } from "@/lib/connectors"
 import type { DraftBrief } from "@/lib/draft-generator"
@@ -27,9 +29,10 @@ async function readConnected() {
   return parseConnectedIds(cookieStore.get(CONNECTORS_COOKIE)?.value)
 }
 
-// Connecting is mocked: there is no OAuth handshake to run yet.
+// Connecting is mocked: there is no OAuth handshake to run yet. Takes either
+// kind of id — the account's connections are one list to the person holding it.
 export async function connectPlatform(platformId: string) {
-  if (!findPlatform(platformId)) {
+  if (!findPlatform(platformId) && !findBlogDestination(platformId)) {
     return
   }
 
@@ -48,20 +51,19 @@ export async function disconnectPlatform(platformId: string) {
   revalidatePath("/editor")
 }
 
-// Posting commits the blog itself as published and records where it went.
-export async function postToPlatforms(input: {
+// Publishing pushes the post to the connected HubSpot blog. Mocked like the
+// connection itself: nothing leaves the prototype.
+export async function publishToHubSpot(input: {
   postId?: string
   title: string
   body: string
-  platformIds: string[]
-  /** Kept with the post, so a draft posted without ever being saved still
+  /** Kept with the post, so a draft published without ever being saved still
       carries the brief it was written from. */
   brief?: DraftBrief
 }) {
   const connected = await readConnected()
-  const platforms = input.platformIds.filter((id) => connected.includes(id))
 
-  if (!platforms.length) {
+  if (!connected.includes(HUBSPOT.id)) {
     return
   }
 
@@ -69,7 +71,6 @@ export async function postToPlatforms(input: {
     id: input.postId || undefined,
     title: input.title,
     body: input.body,
-    platforms,
     brief: input.brief,
   })
 

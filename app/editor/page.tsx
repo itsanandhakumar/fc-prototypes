@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 
 import { savePostAsDraft } from "@/app/editor-actions"
-import { AppHeader } from "@/components/app-header"
+import { AppShell } from "@/components/app-shell"
 import { EditorWorkspace } from "@/components/editor/editor-workspace"
 import {
   generateDraft,
@@ -9,7 +9,7 @@ import {
   parseTargetCharacters,
   type DraftBrief,
 } from "@/lib/draft-generator"
-import { CONNECTORS_COOKIE, connectedPlatforms } from "@/lib/connectors"
+import { CONNECTORS_COOKIE, isConnected } from "@/lib/connectors"
 import { getInsights } from "@/lib/post-insights"
 import { subjectOf, topicFromTitle } from "@/lib/draft-generator"
 import { buildGenerationSteps } from "@/lib/generation-steps"
@@ -83,19 +83,17 @@ export default async function EditorPage({
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
   )
-  const connected = connectedPlatforms(
+  const hubspotConnected = isConnected(
     cookieStore.get(CONNECTORS_COOKIE)?.value
   )
 
   return (
-    <div className="flex h-svh flex-col overflow-hidden">
-      <AppHeader
-        breadcrumbs={[
-          { label: "Home", href: "/dashboard" },
-          { label: title || "New draft" },
-        ]}
-      />
-
+    <AppShell
+      breadcrumbs={[
+        { label: "Home", href: "/dashboard" },
+        { label: title || "New draft" },
+      ]}
+    >
       <form
         action={savePostAsDraft}
         className="flex min-h-0 flex-1 gap-4 overflow-hidden p-6"
@@ -105,7 +103,11 @@ export default async function EditorPage({
         {/* The brief rides along with the save so the stored post keeps the
             instructions it was written from. */}
         <input type="hidden" name="brief" value={brief.brief} />
-        <input type="hidden" name="keywords" value={brief.keywords.join(", ")} />
+        <input
+          type="hidden"
+          name="keywords"
+          value={brief.keywords.join(", ")}
+        />
         <input
           type="hidden"
           name="chars"
@@ -124,13 +126,13 @@ export default async function EditorPage({
           savedPost={
             post && { id: post.id, title: post.title, status: post.status }
           }
-          connectedPlatforms={connected}
+          hubspotConnected={hubspotConnected}
           steps={steps}
           relatedPosts={relatedPosts}
           generating={Boolean(generated)}
         />
       </form>
-    </div>
+    </AppShell>
   )
 }
 
