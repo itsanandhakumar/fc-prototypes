@@ -139,7 +139,10 @@ export function summarize(posts: SocialPost[]): SocialSummary {
   return {
     streakDays,
     daily,
-    impressions: { thisWeek: thisWeekImpressions, lastWeek: lastWeekImpressions },
+    impressions: {
+      thisWeek: thisWeekImpressions,
+      lastWeek: lastWeekImpressions,
+    },
     engagement: { thisWeek: thisWeekEngagement, lastWeek: lastWeekEngagement },
     platforms: [...byPlatform.values()],
   }

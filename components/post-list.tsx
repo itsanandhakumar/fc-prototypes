@@ -316,6 +316,14 @@ export function PostList({
                         variant={
                           post.status === "Published" ? "secondary" : "outline"
                         }
+                        // Published wears HubSpot's orange, the same colour as
+                        // the button that sent it there, so the pill and the
+                        // action read as the one destination.
+                        className={
+                          post.status === "Published"
+                            ? HUBSPOT.badge
+                            : undefined
+                        }
                         title={
                           post.status === "Published"
                             ? `Published to ${HUBSPOT.name}`

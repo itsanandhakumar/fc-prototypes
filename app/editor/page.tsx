@@ -89,8 +89,11 @@ export default async function EditorPage({
 
   return (
     <AppShell
+      // Named for the section rather than for "Home": there are two products
+      // in this sidebar and each has a home, so one label pointing at both
+      // would say nothing about which one it goes to.
       breadcrumbs={[
-        { label: "Home", href: "/dashboard" },
+        { label: "Blogger", href: "/blogger" },
         { label: title || "New draft" },
       ]}
     >

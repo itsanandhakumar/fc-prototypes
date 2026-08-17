@@ -152,6 +152,31 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+  /* The insides of a time input are browser chrome. Chrome draws a hard dark
+     box around the segment being edited, on top of the highlight that already
+     says which one it is — two indicators on a control four characters wide,
+     and the box is the one that looks like a rendering fault. The highlight
+     stays; it is the system's, the same as any other field's selection.
+
+     The `:focus` sits on the input rather than on the segment: a pseudo-class
+     after a `::-webkit-` pseudo-element matches nothing here, and no CSS
+     wildcard reaches all the segments, so they are named one at a time. A
+     24-hour field shows the first two; am/pm is for the locales that show it.
+
+     Plain declarations rather than `@apply`, which is silently dropped from
+     rules like these before it reaches the stylesheet. */
+  input[type="time"]:focus::-webkit-datetime-edit-hour-field,
+  input[type="time"]:focus::-webkit-datetime-edit-minute-field,
+  input[type="time"]:focus::-webkit-datetime-edit-ampm-field {
+    outline: none;
+  }
+  /* The picker's own button, which is the thing most likely to be clicked. */
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer rounded-sm opacity-50 transition-opacity;
+  }
+  input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    @apply opacity-100;
+  }
   html {
     @apply font-sans;
   }

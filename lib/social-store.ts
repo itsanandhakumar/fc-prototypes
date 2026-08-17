@@ -41,31 +41,89 @@ function uniqueId(name: string): string {
   return id
 }
 
-/** Saving upserts and moves the post to the head of the list, the way
-    lib/post-store.ts does. */
-export function saveDraft({
-  id,
-  name,
-  variants,
-}: {
+/** What every write to the store has in common: the post, its copy, and where
+    it goes. What differs is the state it lands in, which is the argument. */
+type Write = {
   id?: string
   name: string
   variants: Array<Pick<SocialVariant, "platformId" | "text">>
-}): SocialPost {
+}
+
+/** Upserts and moves the post to the head of the list, the way
+    lib/post-store.ts does. */
+function upsert(
+  { id, name, variants }: Write,
+  state: Pick<SocialPost, "status" | "scheduledInMinutes"> & {
+    /** Why a platform turned it down, by platform id. */
+    failures?: Record<string, string>
+  }
+): SocialPost {
   const existing = getSocialPost(id)
 
   const saved: SocialPost = {
     id: existing?.id ?? uniqueId(name),
     name,
-    status: "Draft",
+    status: state.status,
     updatedMinutesAgo: 0,
-    // A draft has been nowhere, so it carries no figures.
-    variants: variants.map((variant) => ({ ...variant })),
+    scheduledInMinutes: state.scheduledInMinutes,
+    variants: variants.map((variant) => ({
+      ...variant,
+      // Figures belong to a post that has been seen, and none of these have
+      // been: a post published a moment ago has no engagement yet, and one
+      // rewritten since it was published is not the post those numbers were
+      // measuring. Both come back empty and earn their numbers again.
+      failure: state.failures?.[variant.platformId],
+    })),
   }
 
   posts = [saved, ...posts.filter((post) => post.id !== saved.id)]
 
   return saved
+}
+
+/**
+ * Saving always stores a draft.
+ *
+ * That includes a post that was scheduled: taking it back to a draft takes it
+ * out of the queue, which is the only sense "save" can have for something with
+ * a departure time on it. It is also the way to call one off, and the composer
+ * says so where the button is.
+ */
+export function saveDraft(write: Write): SocialPost {
+  return upsert(write, { status: "Draft" })
+}
+
+/** Queued, to go out in `minutesAhead`. The store keeps the offset rather than
+    a date for the reason everything else here does — see lib/time.ts — and the
+    picker does the conversion in lib/social-schedule.ts. */
+export function schedulePost(
+  write: Write & { minutesAhead: number }
+): SocialPost {
+  return upsert(write, {
+    status: "Scheduled",
+    scheduledInMinutes: Math.max(0, Math.round(write.minutesAhead)),
+  })
+}
+
+/**
+ * Out, on every platform that took it.
+ *
+ * Each network answers for itself, so the outcome is per platform rather than
+ * per post: a post is Failed if any variant was turned down — the one thing
+ * that needs attention is the thing the status should name — and Published
+ * only when all of them went.
+ */
+export function publishPost(
+  write: Write & { failures?: Record<string, string> }
+): SocialPost {
+  const rejected = write.variants.some(
+    (variant) => write.failures?.[variant.platformId]
+  )
+
+  return upsert(write, {
+    status: rejected ? "Failed" : "Published",
+    failures: write.failures,
+  })
 }
 
 /**

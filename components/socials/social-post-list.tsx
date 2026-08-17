@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Search } from "lucide-react"
+import { CalendarDays, List, Search } from "lucide-react"
 
+import { SocialCalendar } from "@/components/socials/social-calendar"
 import { SocialPostRow } from "@/components/socials/social-post-row"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -25,9 +26,27 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "Failed", label: "Failed" },
 ]
 
-export function SocialPostList({ posts }: { posts: SocialPost[] }) {
+type View = "calendar" | "list"
+
+const VIEWS = [
+  { value: "calendar" as const, label: "Calendar", icon: CalendarDays },
+  { value: "list" as const, label: "List", icon: List },
+]
+
+export function SocialPostList({
+  posts,
+  nowMs,
+}: {
+  posts: SocialPost[]
+  /** The one `now` the page settled on, for the calendar to measure from. */
+  nowMs: number
+}) {
   const [status, setStatus] = React.useState<StatusFilter>("all")
   const [query, setQuery] = React.useState("")
+  // The calendar leads. A social plan is mostly a question about when — what is
+  // going out this week, where the gaps are — and a list can only answer that
+  // by being read in order.
+  const [view, setView] = React.useState<View>("calendar")
 
   const search = query.trim().toLowerCase()
 
@@ -54,6 +73,11 @@ export function SocialPostList({ posts }: { posts: SocialPost[] }) {
       }
       return a.updatedMinutesAgo - b.updatedMinutesAgo
     })
+
+  const emptyNote =
+    status !== "all" || search
+      ? "No posts match these filters."
+      : "Nothing here yet."
 
   // Counted off the whole list, not the filtered one, so the numbers hold
   // still as the filters move.
@@ -98,30 +122,55 @@ export function SocialPostList({ posts }: { posts: SocialPost[] }) {
             className={cn(CONTROL_HEIGHT, "w-52 pl-7")}
           />
         </div>
+
+        {/* Which way of looking, not which posts — so it sits apart from the
+            filters, on the far side of the row. Both views are fed the same
+            filtered list: a filter is a filter whichever shape it lands in. */}
+        <div
+          role="group"
+          aria-label="View"
+          className="flex items-center gap-0.5 rounded-md border border-input bg-input/20 p-0.5 dark:bg-input/30"
+        >
+          {VIEWS.map(({ value, label, icon: Icon }) => (
+            <Button
+              key={value}
+              type="button"
+              className={CONTROL_HEIGHT}
+              variant={view === value ? "secondary" : "ghost"}
+              aria-pressed={view === value}
+              onClick={() => setView(value)}
+            >
+              <Icon />
+              {label}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {/* One surface with divided rows, the same shape as Blogger's list. The
-          page does not scroll — the card takes the slack and scrolls inside
-          itself. `relative` is load-bearing for the same reason it is over
-          there: absolutely positioned labels inside would otherwise resolve
-          against the viewport and escape the clip. */}
-      <Card className="min-h-0 w-full gap-0 py-0">
-        <CardContent className="relative min-h-0 overflow-y-auto overscroll-contain px-0">
-          {visible.length ? (
-            <ul className="divide-y divide-foreground/10">
-              {visible.map((post) => (
-                <SocialPostRow key={post.id} post={post} />
-              ))}
-            </ul>
-          ) : (
-            <p className="px-(--card-spacing) py-6 text-xs/relaxed text-muted-foreground">
-              {status !== "all" || search
-                ? "No posts match these filters."
-                : "Nothing here yet."}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {view === "calendar" ? (
+        <SocialCalendar posts={visible} nowMs={nowMs} emptyNote={emptyNote} />
+      ) : (
+        /* One surface with divided rows, the same shape as Blogger's list. The
+           page does not scroll — the card takes the slack and scrolls inside
+           itself. `relative` is load-bearing for the same reason it is over
+           there: absolutely positioned labels inside would otherwise resolve
+           against the viewport and escape the clip. */
+        <Card className="min-h-0 w-full gap-0 py-0">
+          <CardContent className="relative min-h-0 overflow-y-auto overscroll-contain px-0">
+            {visible.length ? (
+              <ul className="divide-y divide-foreground/10">
+                {visible.map((post) => (
+                  <SocialPostRow key={post.id} post={post} />
+                ))}
+              </ul>
+            ) : (
+              <p className="px-(--card-spacing) py-6 text-xs/relaxed text-muted-foreground">
+                {emptyNote}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </section>
   )
 }

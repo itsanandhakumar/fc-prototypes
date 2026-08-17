@@ -12,8 +12,10 @@ import { cn } from "@/lib/utils"
 
 const VIEW_WIDTH = 100
 // Shorter than the value beside it deserves to be — the bars are context for
-// the streak, not the headline.
-const VIEW_HEIGHT = 24
+// the streak, not the headline. They sit on the figure's line now rather than
+// under it, so this is roughly cap height: any taller and the row grows to fit
+// the chart instead of the number.
+const VIEW_HEIGHT = 18
 const GAP = 1.5
 /** A day with nothing posted still gets a mark, so the gap is visibly a day. */
 const EMPTY_HEIGHT = 2
@@ -46,7 +48,9 @@ export function ActivityBars({
     >
       {values.map((value, index) => {
         const height =
-          value === 0 ? EMPTY_HEIGHT : Math.max(MIN_BAR, (value / top) * VIEW_HEIGHT)
+          value === 0
+            ? EMPTY_HEIGHT
+            : Math.max(MIN_BAR, (value / top) * VIEW_HEIGHT)
 
         return (
           <rect

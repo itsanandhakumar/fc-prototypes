@@ -57,3 +57,38 @@ export function generateSocialPost(brief: string, variant = 0): string {
 
   return angle(topic, subject)
 }
+
+// A headline is not a brief. It arrives with the furniture a headline carries —
+// a count at the front, a subtitle after a colon, a parenthetical aside, a
+// relative clause spelling out the stakes — and every piece of it reads as
+// noise once the title is being used mid-sentence. "Ten Internal Linking
+// Mistakes That Quietly Cost You Rankings" is about internal linking mistakes.
+const HEADLINE_FURNITURE = [
+  /\s*\([^)]*\)\s*$/,
+  /:\s.*$/,
+  /^(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+/i,
+  /\s+(that|which|who)\s+.*$/i,
+]
+
+function briefFromHeadline(title: string): string {
+  let brief = title.trim()
+  for (const pattern of HEADLINE_FURNITURE) {
+    brief = brief.replace(pattern, "").trim()
+  }
+  // A headline that is nothing but furniture keeps its own words.
+  return brief || title.trim()
+}
+
+/**
+ * A post developed from something already on the blog. The blog post's title is
+ * the brief, and it goes through the same angles a typed one does — the result
+ * is a post making the argument, not a notice that an article exists somewhere
+ * with a link to go and read it.
+ *
+ * Which angle it takes follows from the title, so two blog posts picked in a
+ * row do not come back reading like each other.
+ */
+export function generateFromBlogTitle(title: string, variant = 0): string {
+  const seed = [...title].reduce((total, char) => total + char.charCodeAt(0), 0)
+  return generateSocialPost(briefFromHeadline(title), seed + variant)
+}

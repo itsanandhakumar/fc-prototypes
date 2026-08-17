@@ -26,9 +26,12 @@ export function SummaryStrip({ summary }: { summary: SocialSummary }) {
         label="Posting streak"
         value={`${streakDays} ${streakDays === 1 ? "day" : "days"}`}
         trend={daily}
+        // No description: the chart labels its own axes, and the line under it
+        // states the streak and the total. A paragraph saying the same thing in
+        // sentences is two lines to read before reaching the thing that answers
+        // the question faster.
         detail={{
           title: "Posting streak",
-          description: "Each bar is a day. The run at the right is your streak.",
           content: <StreakDetail summary={summary} />,
         }}
       />
@@ -44,9 +47,11 @@ export function SummaryStrip({ summary }: { summary: SocialSummary }) {
           percent: percentChange(impressions.thisWeek, impressions.lastWeek),
           caption: "vs last week",
         }}
+        // No description: the rows are the answer to where the figure came
+        // from, and repeating the total above them is a line to read before
+        // reaching it.
         detail={{
           title: "Impressions this week",
-          description: `Where the ${formatCount(impressions.thisWeek)} came from.`,
           content: <ImpressionsDetail summary={summary} />,
         }}
       />
@@ -61,9 +66,10 @@ export function SummaryStrip({ summary }: { summary: SocialSummary }) {
           percent: percentChange(engagement.thisWeek, engagement.lastWeek),
           caption: "vs last week",
         }}
+        // No description: the icons name the three actions, which is all the
+        // sentence was doing.
         detail={{
           title: "Engagement this week",
-          description: "Likes, comments and reposts across your platforms.",
           content: <EngagementDetail summary={summary} />,
         }}
       />

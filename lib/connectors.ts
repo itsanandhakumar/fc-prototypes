@@ -78,6 +78,14 @@ export type Platform = {
   attachments: AttachmentRule[]
   /** How the platform treats a URL in the body. */
   linkNote: string
+  /**
+   * Where a post on this platform lives once it is out. `{id}` is a numeric
+   * post id and `{token}` an opaque one — the networks mint two different
+   * shapes, and a link that carries the wrong one does not look like a link to
+   * that network. Nothing is really posted, so the prototype makes the id up
+   * (see `permalinkFor` in lib/social-publish.ts).
+   */
+  permalink: string
   /** Short-form platforms get a one-line hook; long-form ones get the argument. */
   copy: "short" | "long"
   preview: PlatformPreview
@@ -110,6 +118,7 @@ export const PLATFORMS: Platform[] = [
       },
     ],
     linkNote: "A link in the text renders as a preview card.",
+    permalink: "linkedin.com/feed/update/urn:li:activity:{id}",
     copy: "long",
     preview: {
       truncateAt: 210,
@@ -151,6 +160,7 @@ export const PLATFORMS: Platform[] = [
       { kind: "gif", label: "GIF", max: 1, accept: "image/gif" },
     ],
     linkNote: "A link counts as 23 characters however long it is.",
+    permalink: "x.com/forwardtools/status/{id}",
     copy: "short",
     preview: {
       truncateAt: null,
@@ -191,6 +201,7 @@ export const PLATFORMS: Platform[] = [
       { kind: "video", label: "Video", max: 1, accept: "video/*" },
     ],
     linkNote: "Links are counted in full, unlike on X.",
+    permalink: "bsky.app/profile/forward.bsky.social/post/{token}",
     copy: "short",
     preview: {
       truncateAt: null,
@@ -225,6 +236,7 @@ export const PLATFORMS: Platform[] = [
       { kind: "video", label: "Video", max: 1, accept: "video/*" },
     ],
     linkNote: "The first link in the post gets a preview card.",
+    permalink: "threads.net/@forwardtools/post/{token}",
     copy: "short",
     preview: {
       truncateAt: null,
@@ -264,6 +276,7 @@ export const PLATFORMS: Platform[] = [
       { kind: "video", label: "Video", max: 1, accept: "video/*" },
     ],
     linkNote: "Every link costs 23 characters, however long it is.",
+    permalink: "mastodon.social/@forward/{id}",
     copy: "short",
     preview: {
       truncateAt: null,
@@ -320,6 +333,13 @@ export type BlogDestination = {
    * that followed our theme would stop being HubSpot's orange.
    */
   button: string
+  /**
+   * The same brand colour worn quietly, for a badge that reports a post already
+   * went here. A status pill is read in a list of dozens, so it takes the
+   * orange as a wash with the ink deepened enough to stay legible on it, rather
+   * than the solid fill the button uses to ask for a click.
+   */
+  badge: string
 }
 
 export const HUBSPOT: BlogDestination = {
@@ -329,6 +349,8 @@ export const HUBSPOT: BlogDestination = {
   domain: "blog.forward.tools",
   button:
     "bg-[#FF7A59] text-white hover:bg-[#F2603C] focus-visible:border-[#FF7A59] focus-visible:ring-[#FF7A59]/40",
+  badge:
+    "bg-[#FF7A59]/15 text-[#B0411F] dark:bg-[#FF7A59]/15 dark:text-[#FF9C82]",
 }
 
 // One today. It stays a list because the settings panel renders it as one, and
@@ -375,4 +397,36 @@ export function orderPlatformIds(ids: string[]): string[] {
 
 export function platformNames(ids: string[]): string[] {
   return orderPlatformIds(ids).map((id) => findPlatform(id)?.name ?? id)
+}
+
+/**
+ * The rules one set of media has to satisfy to go to all of these at once.
+ *
+ * A kind survives only if every platform takes it — LinkedIn accepts a document
+ * and X does not, so a post going to both cannot carry one — and the count is
+ * the lowest any of them allows, because the strictest is the one that would
+ * reject it. Attaching the same media everywhere means meeting the tightest
+ * rule rather than the average of them, which is also what makes it safe to
+ * hand the same files to each platform when the writer switches to setting
+ * them separately.
+ */
+export function sharedAttachmentRules(platforms: Platform[]): AttachmentRule[] {
+  const [first, ...rest] = platforms
+  if (!first) {
+    return []
+  }
+
+  return first.attachments.flatMap((rule) => {
+    let max = rule.max
+
+    for (const platform of rest) {
+      const match = platform.attachments.find((item) => item.kind === rule.kind)
+      if (!match) {
+        return []
+      }
+      max = Math.min(max, match.max)
+    }
+
+    return [{ ...rule, max }]
+  })
 }

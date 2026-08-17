@@ -34,7 +34,19 @@ export function AppHeader({ breadcrumbs = [] }: { breadcrumbs?: Crumb[] }) {
                 {crumb.label}
               </Link>
             ) : (
-              <span aria-current="page" className="truncate font-medium">
+              // Only the last crumb is the page you are on. An unlinked crumb
+              // in the middle is a step you cannot jump back to, not a second
+              // current page.
+              <span
+                aria-current={
+                  index === breadcrumbs.length - 1 ? "page" : undefined
+                }
+                className={
+                  index === breadcrumbs.length - 1
+                    ? "truncate font-medium"
+                    : "truncate text-muted-foreground"
+                }
+              >
                 {crumb.label}
               </span>
             )}

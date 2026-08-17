@@ -1,6 +1,20 @@
 import type * as React from "react"
 
+import type { Platform } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
+
+/**
+ * The mark in the platform's own colour, for the platforms that have one. X and
+ * Threads set theirs in the surrounding ink rather than a brand colour — that
+ * is their brand — and the registry already records which is which, so this is
+ * a reading of it rather than a second list to keep in step.
+ */
+export function platformTint(
+  platform: Platform
+): React.CSSProperties | undefined {
+  const { chrome } = platform.preview
+  return chrome.glyphTint === "accent" ? { color: chrome.accent } : undefined
+}
 
 // Each destination's own mark, so a preview is identifiable before anyone
 // reads it. Single paths on a 24-square, filled with currentColor so the

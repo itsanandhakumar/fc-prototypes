@@ -31,7 +31,7 @@ export const ACCOUNTS: Account[] = [
 
 export const DEMO_PASSWORD = "forward"
 
-export const HOME_ROUTE = "/dashboard"
+export const HOME_ROUTE = "/blogger"
 export const LOGIN_ROUTE = "/"
 
 export function findAccount(email: string | undefined): Account | undefined {

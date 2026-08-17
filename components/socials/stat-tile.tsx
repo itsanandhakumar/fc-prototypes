@@ -29,13 +29,17 @@ function TileBody({
   const rising = percent !== null && percent !== undefined && percent >= 0
   const Arrow = rising ? TrendingUp : TrendingDown
 
+  // Two rows rather than three. The figure and what qualifies it — a trend, or
+  // a change against last week — belong on one line: they are one statement,
+  // and stacking them spent height the calendar underneath needs more than this
+  // strip does. Everything here is context; the month is the work.
   return (
     <Card
       size="sm"
       className={
         interactive
-          ? "h-full w-full gap-2 transition-colors hover:bg-muted/40"
-          : "h-full w-full gap-2"
+          ? "h-full w-full gap-1 transition-colors hover:bg-muted/40"
+          : "h-full w-full gap-1"
       }
     >
       <span className="flex items-center gap-1 px-(--card-spacing) text-xs/relaxed text-muted-foreground">
@@ -45,35 +49,37 @@ function TileBody({
         ) : null}
       </span>
 
-      {/* Proportional figures, not tabular: at display size the tabular
-          variant's even advances read as gaps. */}
-      <span className="px-(--card-spacing) text-lg font-medium">{value}</span>
+      <div className="flex items-center justify-between gap-3 px-(--card-spacing)">
+        {/* Proportional figures, not tabular: at display size the tabular
+            variant's even advances read as gaps. */}
+        <span className="shrink-0 text-lg/none font-medium">{value}</span>
 
-      {trend ? (
-        <div className="px-(--card-spacing)">
-          <ActivityBars values={trend} />
-        </div>
-      ) : null}
+        {trend ? (
+          <div className="min-w-0 flex-1">
+            <ActivityBars values={trend} />
+          </div>
+        ) : null}
 
-      {change ? (
-        <div className="flex items-center gap-1.5 px-(--card-spacing) text-xs/relaxed text-muted-foreground">
-          {percent === null || percent === undefined ? (
-            // No baseline. Saying "+100%" against nothing would be a fiction.
-            <span>{change.caption}</span>
-          ) : (
-            <>
-              {/* The direction is carried by the icon and the sign, never by
-                  colour alone — and there is no success token to reach for. */}
-              <Arrow className="size-3.5 shrink-0" aria-hidden />
-              <span className="tabular-nums">
-                {percent > 0 ? "+" : ""}
-                {percent}%
-              </span>
+        {change ? (
+          <div className="flex shrink-0 items-center gap-1.5 text-xs/relaxed text-muted-foreground">
+            {percent === null || percent === undefined ? (
+              // No baseline. Saying "+100%" against nothing would be a fiction.
               <span>{change.caption}</span>
-            </>
-          )}
-        </div>
-      ) : null}
+            ) : (
+              <>
+                {/* The direction is carried by the icon and the sign, never by
+                    colour alone — and there is no success token to reach for. */}
+                <Arrow className="size-3.5 shrink-0" aria-hidden />
+                <span className="tabular-nums">
+                  {percent > 0 ? "+" : ""}
+                  {percent}%
+                </span>
+                <span>{change.caption}</span>
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
     </Card>
   )
 }
@@ -96,8 +102,16 @@ export function StatTile({
   /** What opens when the tile is clicked. A tile without one is not a button —
       every figure here is a sum, so there is always a breakdown worth having,
       but the tile should not pretend to be pressable if it has nothing behind
-      it. */
-  detail?: { title: string; description: string; content: React.ReactNode }
+      it.
+
+      The description is optional, and should stay unwritten when the content
+      below it already says the same thing. A paragraph nobody needs is not free:
+      it is the first thing in the dialog and the last thing anyone reads. */
+  detail?: {
+    title: string
+    description?: string
+    content: React.ReactNode
+  }
 }) {
   const body = (
     <TileBody
@@ -131,7 +145,9 @@ export function StatTile({
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{detail.title}</DialogTitle>
-          <DialogDescription>{detail.description}</DialogDescription>
+          {detail.description ? (
+            <DialogDescription>{detail.description}</DialogDescription>
+          ) : null}
         </DialogHeader>
 
         {detail.content}

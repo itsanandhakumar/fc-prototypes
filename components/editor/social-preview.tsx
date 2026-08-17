@@ -15,7 +15,7 @@ import {
   AttachmentTile,
   type Attachment,
 } from "@/components/editor/attachment-dropzone"
-import { PlatformGlyph } from "@/components/editor/platform-glyph"
+import { PlatformGlyph, platformTint } from "@/components/editor/platform-glyph"
 import type { Platform } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
 
@@ -75,7 +75,10 @@ function Media({
 }
 
 // The image half of the card is what a share image generated for this post
-// would look like: the brand gradient with the headline set over it.
+// would look like: the brand gradient with the headline set over it. With no
+// headline there is nothing to set, and a blank rectangle claims an image that
+// is not there — so the card comes through as the strip these networks show
+// for a page with nothing to picture.
 function LinkCard({
   platform,
   url,
@@ -89,28 +92,30 @@ function LinkCard({
   const domain = url.split("/")[0]
   const readingLine = `${domain} · 4 min read`
 
-  const heading = (
+  const heading = title ? (
     <span className="line-clamp-2 text-xs font-semibold">{title}</span>
-  )
+  ) : null
   const meta = <span className={cn("text-xs", chrome.meta)}>{readingLine}</span>
 
   return (
     <div
       className={cn("overflow-hidden border", chrome.linkRadius, chrome.card)}
     >
-      <div
-        className="flex aspect-[1.91/1] flex-col justify-between p-3"
-        style={{
-          backgroundImage: `linear-gradient(135deg, ${chrome.accent} 0%, ${chrome.accentTo} 100%)`,
-        }}
-      >
-        <span className="text-[0.65em] font-semibold tracking-[0.2em] text-white/70 uppercase">
-          forward.tools
-        </span>
-        <span className="line-clamp-3 text-sm/snug font-semibold text-white">
-          {title}
-        </span>
-      </div>
+      {title ? (
+        <div
+          className="flex aspect-[1.91/1] flex-col justify-between p-3"
+          style={{
+            backgroundImage: `linear-gradient(135deg, ${chrome.accent} 0%, ${chrome.accentTo} 100%)`,
+          }}
+        >
+          <span className="text-[0.65em] font-semibold tracking-[0.2em] text-white/70 uppercase">
+            forward.tools
+          </span>
+          <span className="line-clamp-3 text-sm/snug font-semibold text-white">
+            {title}
+          </span>
+        </div>
+      ) : null}
 
       <div className={cn("flex flex-col gap-0.5 px-3 py-2", chrome.linkFooter)}>
         {chrome.linkOrder === "title-first" ? (
@@ -256,7 +261,11 @@ export function SocialPreview({
   // A link only renders as a card when nothing else is attached.
   const showLinkCard = Boolean(url) && attachments.length === 0
 
-  const collapsed = truncateAt !== null && text.length > truncateAt
+  // The fold is real on LinkedIn, and so is getting past it. Opening it here
+  // does what tapping "see more" does there: the rest of the post, in place.
+  const [expanded, setExpanded] = React.useState(false)
+  const folds = truncateAt !== null && text.length > truncateAt
+  const collapsed = folds && !expanded
   const shown = collapsed ? text.slice(0, truncateAt ?? 0) : text
 
   const inline = chrome.header === "inline"
@@ -306,15 +315,24 @@ export function SocialPreview({
         <PlatformGlyph
           platformId={platform.id}
           className="mt-0.5 text-base"
-          style={
-            chrome.glyphTint === "accent" ? { color: chrome.accent } : undefined
-          }
+          style={platformTint(platform)}
         />
       </div>
 
       <p className="text-xs/relaxed whitespace-pre-line">
         {shown}
-        {collapsed ? <span className={chrome.meta}>… see more</span> : null}
+        {collapsed ? (
+          <>
+            …{" "}
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className={cn("hover:underline", chrome.meta)}
+            >
+              see more
+            </button>
+          </>
+        ) : null}
       </p>
 
       <Media attachments={attachments} rounded={chrome.linkRadius} />

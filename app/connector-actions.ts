@@ -39,16 +39,24 @@ export async function connectPlatform(platformId: string) {
   const connected = await readConnected()
   await writeConnected([...new Set([...connected, platformId])])
 
-  revalidatePath("/dashboard")
+  revalidatePath("/blogger")
   revalidatePath("/editor")
+  // Social Studio asks the same question of the same cookie: the workspace will
+  // not post to a network the account is not signed in to, so connecting from
+  // the publish dialog has to reach the page holding that answer.
+  revalidatePath("/socials/editor")
 }
 
 export async function disconnectPlatform(platformId: string) {
   const connected = await readConnected()
   await writeConnected(connected.filter((id) => id !== platformId))
 
-  revalidatePath("/dashboard")
+  revalidatePath("/blogger")
   revalidatePath("/editor")
+  // Social Studio asks the same question of the same cookie: the workspace will
+  // not post to a network the account is not signed in to, so connecting from
+  // the publish dialog has to reach the page holding that answer.
+  revalidatePath("/socials/editor")
 }
 
 // Publishing pushes the post to the connected HubSpot blog. Mocked like the
@@ -74,6 +82,6 @@ export async function publishToHubSpot(input: {
     brief: input.brief,
   })
 
-  revalidatePath("/dashboard")
-  redirect(`/dashboard?posted=${encodeURIComponent(published.id)}`)
+  revalidatePath("/blogger")
+  redirect(`/blogger?posted=${encodeURIComponent(published.id)}`)
 }

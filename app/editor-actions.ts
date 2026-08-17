@@ -64,7 +64,7 @@ export async function createPostFromTitle(
     brief,
   })
 
-  revalidatePath("/dashboard")
+  revalidatePath("/blogger")
   redirect(`/editor?post=${encodeURIComponent(created.id)}`)
 }
 
@@ -87,8 +87,8 @@ export async function savePostAsDraft(formData: FormData) {
     },
   })
 
-  revalidatePath("/dashboard")
+  revalidatePath("/blogger")
   // Saving hands the writer back to the list, with the draft they just saved
   // called out at the top of it.
-  redirect(`/dashboard?saved=${encodeURIComponent(saved.id)}`)
+  redirect(`/blogger?saved=${encodeURIComponent(saved.id)}`)
 }

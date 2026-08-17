@@ -11,11 +11,11 @@ import { cn } from "@/lib/utils"
 // href alone would leave the sidebar looking unselected mid-edit.
 const SECTIONS = [
   {
-    href: "/dashboard",
+    href: "/blogger",
     label: "Blogger",
     icon: PenLine,
     owns: (path: string) =>
-      path.startsWith("/dashboard") || path.startsWith("/editor"),
+      path.startsWith("/blogger") || path.startsWith("/editor"),
   },
   {
     href: "/socials",
@@ -29,7 +29,10 @@ export function SidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Products" className="flex min-h-0 flex-1 flex-col gap-0.5 p-2">
+    <nav
+      aria-label="Products"
+      className="flex min-h-0 flex-1 flex-col gap-0.5 p-2"
+    >
       {SECTIONS.map(({ href, label, icon: Icon, owns }) => {
         const current = owns(pathname)
 

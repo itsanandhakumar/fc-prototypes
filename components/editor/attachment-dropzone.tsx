@@ -4,8 +4,17 @@ import * as React from "react"
 import { FileText, Plus, X as XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import type { AttachmentKind, Platform } from "@/lib/connectors"
+import type { AttachmentKind, AttachmentRule } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
+
+/**
+ * What the rules belong to. A platform satisfies this shape, and so does a
+ * set of them taken together — one post going to several at once has to meet
+ * all their rules, and there is no Platform to represent that (see
+ * `sharedAttachmentRules` in lib/connectors.ts). Only the name and the rules
+ * were ever read from it, so this is what it always needed to be.
+ */
+export type MediaDestination = { name: string; attachments: AttachmentRule[] }
 
 export type Attachment = {
   id: string
@@ -74,25 +83,25 @@ export function AttachmentTile({
 }
 
 export function AttachmentDropzone({
-  platform,
+  destination,
   attachments,
   onChange,
 }: {
-  platform: Platform
+  destination: MediaDestination
   attachments: Attachment[]
   onChange: (next: Attachment[]) => void
 }) {
   const [dragging, setDragging] = React.useState(false)
   const [notice, setNotice] = React.useState<string | null>(null)
 
-  const accept = platform.attachments.map((rule) => rule.accept).join(",")
+  const accept = destination.attachments.map((rule) => rule.accept).join(",")
   const currentKind = attachments[0]?.kind
   const rule = currentKind
-    ? platform.attachments.find((item) => item.kind === currentKind)
+    ? destination.attachments.find((item) => item.kind === currentKind)
     : undefined
   const canAddMore = !rule || attachments.length < rule.max
 
-  const summary = platform.attachments
+  const summary = destination.attachments
     .map((item) =>
       item.max > 1 ? `${item.label} up to ${item.max}` : `${item.label} 1`
     )
@@ -105,16 +114,16 @@ export function AttachmentDropzone({
     }
 
     const kind = currentKind ?? kindOf(incoming[0])
-    const matching = platform.attachments.find((item) => item.kind === kind)
+    const matching = destination.attachments.find((item) => item.kind === kind)
 
     if (!matching) {
-      setNotice(`${platform.name} does not take that kind of file.`)
+      setNotice(`${destination.name} does not take that kind of file.`)
       return
     }
 
     const usable = incoming.filter((file) => kindOf(file) === kind)
     if (usable.length !== incoming.length) {
-      setNotice(`${platform.name} takes one kind of media per post.`)
+      setNotice(`${destination.name} takes one kind of media per post.`)
     } else {
       setNotice(null)
     }
@@ -122,7 +131,7 @@ export function AttachmentDropzone({
     const room = matching.max - attachments.length
     if (room <= 0) {
       setNotice(
-        `${matching.label} is limited to ${matching.max} on ${platform.name}.`
+        `${matching.label} is limited to ${matching.max} on ${destination.name}.`
       )
       return
     }
@@ -136,7 +145,7 @@ export function AttachmentDropzone({
 
     if (usable.length > room) {
       setNotice(
-        `${matching.label} is limited to ${matching.max} on ${platform.name}.`
+        `${matching.label} is limited to ${matching.max} on ${destination.name}.`
       )
     }
 
@@ -147,10 +156,12 @@ export function AttachmentDropzone({
   }
 
   function remove(id: string) {
-    const going = attachments.find((item) => item.id === id)
-    if (going) {
-      URL.revokeObjectURL(going.url)
-    }
+    // Taken off this list, not destroyed. The same file can be on more than
+    // one list — a post that carried one set of media to every platform and
+    // then split them apart holds the same attachment in each — and revoking
+    // the object URL here would blank it everywhere else it is still shown.
+    // The URLs go when the page does, which for a prototype holding a handful
+    // of files is soon enough.
     setNotice(null)
     onChange(attachments.filter((item) => item.id !== id))
   }
@@ -242,7 +253,7 @@ export function AttachmentDropzone({
         <p className="text-xs text-destructive">{notice}</p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Files stay in the browser — nothing is uploaded to {platform.name}.
+          Files stay in the browser — nothing is uploaded to {destination.name}.
         </p>
       )}
     </div>

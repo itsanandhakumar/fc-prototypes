@@ -27,7 +27,7 @@ export async function AppSidebar() {
           read as one line across the window. */}
       <div className="flex h-12 shrink-0 items-center px-3">
         <Link
-          href="/dashboard"
+          href="/blogger"
           aria-label="Forward"
           className="flex items-center rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
