@@ -30,6 +30,8 @@ pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template. It holds no secrets, and setup starts by copying it.
+!.env.example
 
 # typescript
 *.tsbuildinfo
