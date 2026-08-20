@@ -32,6 +32,7 @@ Then open http://localhost:3000 and create an account.
 | `AUTH_SECRET` | `npx auth secret` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud → Credentials → OAuth client ID (Web application). Redirect URI: `http://localhost:3000/api/auth/callback/google` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Run `claude setup-token` |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Resend → API Keys. `EMAIL_FROM` must be on a domain verified in Resend. Password reset email only — see `ai/guide/resend-setup.md` |
 
 You also need the Claude Code CLI on `PATH`
 (`npm i -g @anthropic-ai/claude-code`) — generation shells out to it. Do **not**
@@ -45,6 +46,9 @@ Full walkthroughs live in `ai/guide/`: `tidb-cloud-setup.md` and
 
 - **`/`** — log in or create an account. Google SSO and email/password land on
   the same user record, keyed by email.
+- **`/forgot-password`** → **`/reset-password?token=`** — emails a single-use
+  link that expires in an hour. Both are reachable without a session, which is
+  the point: someone who cannot log in is logged out.
 - **`/blogger`** — your posts, filtered by status, recency and title.
 - **`/editor`** — the brief generates here. `?post=<id>` opens a stored post;
   `?prompt=`/`?title=` opens an empty one that generates on arrival. Two ways
