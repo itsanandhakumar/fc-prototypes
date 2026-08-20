@@ -21,6 +21,7 @@ import { type BlogPost } from "@/lib/blog-data"
 import { formatRelativeTime } from "@/lib/time"
 import { PlatformGlyph } from "@/components/editor/platform-glyph"
 import { HUBSPOT } from "@/lib/connectors"
+import { BLOG_PUBLISHING_ENABLED } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
 // Every control on the filter row is set to one height, so the row reads as a
@@ -316,28 +317,39 @@ export function PostList({
                         variant={
                           post.status === "Published" ? "secondary" : "outline"
                         }
-                        // Published wears HubSpot's orange, the same colour as
-                        // the button that sent it there, so the pill and the
-                        // action read as the one destination.
+                        // With a CMS connected, Published wears its orange and
+                        // mark — the same colour as the button that sent it
+                        // there, so the pill and the action read as the one
+                        // destination. Without one, Published is a state in
+                        // Forward and nothing more, so it is an ordinary pill:
+                        // borrowing a logo would claim the post is somewhere it
+                        // has never been.
                         className={
-                          post.status === "Published"
+                          post.status === "Published" && BLOG_PUBLISHING_ENABLED
                             ? HUBSPOT.badge
                             : undefined
                         }
                         title={
-                          post.status === "Published"
+                          post.status === "Published" && BLOG_PUBLISHING_ENABLED
                             ? `Published to ${HUBSPOT.name}`
                             : undefined
                         }
                       >
                         {post.status === "Published" ? (
-                          <>
-                            {/* The badge sizes its own icons, so the glyph
-                                takes no class of its own here. */}
-                            <PlatformGlyph platformId={HUBSPOT.id} />
-                            Published
-                            <span className="sr-only"> to {HUBSPOT.name}</span>
-                          </>
+                          BLOG_PUBLISHING_ENABLED ? (
+                            <>
+                              {/* The badge sizes its own icons, so the glyph
+                                  takes no class of its own here. */}
+                              <PlatformGlyph platformId={HUBSPOT.id} />
+                              Published
+                              <span className="sr-only">
+                                {" "}
+                                to {HUBSPOT.name}
+                              </span>
+                            </>
+                          ) : (
+                            "Published"
+                          )
                         ) : (
                           "Draft"
                         )}

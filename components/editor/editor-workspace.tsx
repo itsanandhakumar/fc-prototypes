@@ -11,7 +11,7 @@ import {
   Undo2,
 } from "lucide-react"
 
-import { savePostAsDraft } from "@/app/editor-actions"
+import { publishPost, savePostAsDraft } from "@/app/editor-actions"
 import { GenerationLog } from "@/components/editor/generation-log"
 import { PostIdeas } from "@/components/editor/post-ideas"
 import { PublishDialog } from "@/components/editor/publish-dialog"
@@ -490,24 +490,34 @@ export function EditorWorkspace({
           >
             Save as draft
           </Button>
-          {/* Publishing hands the post to the connected blog. The dialog is
-              where the title, slug, author, tags and featured image are
-              confirmed before it goes.
-
-              The first public release stops at Copy — there is no CMS behind
-              it yet — so the button is absent rather than disabled: a dead
-              primary action is worse than one fewer. */}
+          {/* Two builds, two meanings of the same word.
+              With a CMS connected, publishing hands the post over, and the
+              dialog is where the title, address and length are confirmed
+              before it goes — it wears the destination's own colour and mark,
+              because the post is leaving Forward.
+              Without one, there is nowhere to hand it to. Publishing is then a
+              state in Forward — the writer is done — and the button is an
+              ordinary primary action that says so plainly. */}
           {BLOG_PUBLISHING_ENABLED ? (
-          <PublishDialog
-            postId={postId}
-            title={title}
-            body={body}
-            brief={brief}
-            insights={insights}
-            connected={hubspotConnected}
-            disabled={running || !hasDraft}
-          />
-          ) : null}
+            <PublishDialog
+              postId={postId}
+              title={title}
+              body={body}
+              brief={brief}
+              insights={insights}
+              connected={hubspotConnected}
+              disabled={running || !hasDraft}
+            />
+          ) : (
+            <Button
+              type="submit"
+              formAction={publishPost}
+              size="lg"
+              disabled={running || !hasDraft}
+            >
+              Publish
+            </Button>
+          )}
         </div>
       </div>
 

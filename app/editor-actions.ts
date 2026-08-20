@@ -7,6 +7,7 @@ import type { PostStatus } from "@/lib/blog-data"
 import type { StoredInsights } from "@/lib/db/schema"
 import { parseKeywords, parseTargetCharacters } from "@/lib/draft-generator"
 import { deleteDraft, savePost } from "@/lib/post-store"
+import { BLOG_PUBLISHING_ENABLED } from "@/lib/release"
 import { requireUser } from "@/lib/session"
 
 // The brief travels to the editor on the URL; the draft is written there, by
@@ -101,6 +102,26 @@ export async function savePostAsDraft(formData: FormData) {
   await save(formData, "Draft")
 }
 
-// There is no publish action here. Publishing goes to the connected blog and is
-// a confirmation rather than a form submit, so it lives in `PublishDialog` and
-// `publishToHubSpot` — which is also what writes the post as Published.
+/**
+ * Publish, in the build that has nowhere to publish to.
+ *
+ * With no CMS connected, "published" is a state in Forward rather than an event
+ * somewhere else: the writer is done, and says so. The post is theirs to take
+ * away with Copy Markdown.
+ *
+ * The other build does not use this. Publishing to a connected blog is a
+ * confirmation rather than a form submit, so it lives in `PublishDialog` and
+ * `publishToHubSpot` — which writes the post as Published itself, along with
+ * the remote id that stops a second publish from duplicating it.
+ */
+export async function publishPost(formData: FormData) {
+  if (BLOG_PUBLISHING_ENABLED) {
+    // Belt and braces. The button that calls this is not rendered when a CMS is
+    // configured, and if that ever changes, silently marking a post published
+    // without sending it anywhere is the wrong failure.
+    throw new Error(
+      "publishPost is for builds without a CMS. Use publishToHubSpot."
+    )
+  }
+  await save(formData, "Published")
+}
