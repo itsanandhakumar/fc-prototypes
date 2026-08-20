@@ -5,7 +5,11 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
-import { EmailNotConfigured, sendPasswordResetEmail } from "@/lib/email/resend"
+import {
+  EmailNotConfigured,
+  EmailRejected,
+  sendPasswordResetEmail,
+} from "@/lib/email/resend"
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth"
 import {
   consumeResetToken,
@@ -71,11 +75,24 @@ export async function requestPasswordReset(
   } catch (error) {
     // Misconfiguration is worth saying out loud — it is ours to fix, and
     // "check your inbox" would be a lie when nothing was ever sent.
-    if (error instanceof EmailNotConfigured) {
-      console.error(error.message)
+    //
+    // A rejection Resend calls permanent gets the same treatment: an unverified
+    // sending domain or a bad key will still be broken in a minute, so "try
+    // again shortly" would send someone off to do exactly the thing that
+    // cannot work. The reason goes to the log rather than the screen — it
+    // names our infrastructure, and the person reading it cannot act on it.
+    if (
+      error instanceof EmailNotConfigured ||
+      (error instanceof EmailRejected && error.permanent)
+    ) {
+      console.error(
+        error instanceof EmailRejected
+          ? `Email rejected (${error.status}): ${error.message}`
+          : error.message
+      )
       return {
         done: false,
-        error: "Email isn't configured on this server yet. Contact support.",
+        error: "Email isn't set up correctly on this server. Contact support.",
       }
     }
     console.error("Could not send the reset email:", error)

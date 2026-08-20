@@ -16,6 +16,34 @@ export class EmailNotConfigured extends Error {
   }
 }
 
+/**
+ * Resend refused the message.
+ *
+ * `permanent` separates "this will never work until someone changes a setting"
+ * from "this might work in a minute". Retrying a wrong from-address forever is
+ * not a retry, and telling the person at the keyboard to try again shortly is
+ * a lie they will act on.
+ */
+export class EmailRejected extends Error {
+  constructor(
+    message: string,
+    readonly permanent: boolean,
+    readonly status?: number
+  ) {
+    super(message)
+    this.name = "EmailRejected"
+  }
+}
+
+/** 401 bad key, 403 unverified domain, 404 wrong endpoint, 422 malformed
+    address — all settings, not weather. 429 and 5xx are worth another go. */
+function isPermanent(status: number | undefined): boolean {
+  if (status === undefined) {
+    return false
+  }
+  return status >= 400 && status < 500 && status !== 429 && status !== 408
+}
+
 /** Where mail comes from. Must be an address on a domain verified in Resend —
     Resend rejects anything else, which is the failure people hit first. */
 function sender(): string {
@@ -53,10 +81,18 @@ async function send(options: {
   // The SDK reports failures in the payload rather than by throwing, so an
   // unchecked call looks like it worked and silently sends nothing.
   if (error) {
-    throw new Error(`Resend refused the message: ${error.message}`)
+    const status = (error as { statusCode?: number }).statusCode
+    throw new EmailRejected(
+      `Resend refused the message: ${error.message}`,
+      isPermanent(status),
+      status
+    )
   }
   if (!data?.id) {
-    throw new Error("Resend accepted the message but returned no id.")
+    throw new EmailRejected(
+      "Resend accepted the message but returned no id.",
+      false
+    )
   }
 
   return { id: data.id }
