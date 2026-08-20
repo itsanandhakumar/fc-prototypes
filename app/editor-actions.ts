@@ -48,7 +48,7 @@ export async function createPostFromTitle(
 
   if (replaceDraftId) {
     await deleteDraft(user.id, replaceDraftId)
-    revalidatePath("/dashboard")
+    revalidatePath("/blogger")
   }
 
   redirect(`/editor?title=${encodeURIComponent(title)}`)
@@ -91,19 +91,16 @@ async function save(formData: FormData, status: PostStatus) {
     insights: readInsights(formData),
   })
 
-  revalidatePath("/dashboard")
+  revalidatePath("/blogger")
   // Saving hands the writer back to the list, with the post they just saved
   // called out at the top of it.
-  redirect(`/dashboard?saved=${encodeURIComponent(saved.id)}`)
+  redirect(`/blogger?saved=${encodeURIComponent(saved.id)}`)
 }
 
 export async function savePostAsDraft(formData: FormData) {
   await save(formData, "Draft")
 }
 
-// "Published" marks the post finished in the writer's own library. It does not
-// send it anywhere — the social publishing workflow is deferred to Studio, so
-// there is no network call behind this.
-export async function publishPostAction(formData: FormData) {
-  await save(formData, "Published")
-}
+// There is no publish action here. Publishing goes to the connected blog and is
+// a confirmation rather than a form submit, so it lives in `PublishDialog` and
+// `publishToHubSpot` — which is also what writes the post as Published.

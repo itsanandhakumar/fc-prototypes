@@ -17,7 +17,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { formatRelativeTime, type BlogPost } from "@/lib/blog-data"
+import { type BlogPost } from "@/lib/blog-data"
+import { formatRelativeTime } from "@/lib/time"
+import { PlatformGlyph } from "@/components/editor/platform-glyph"
+import { HUBSPOT } from "@/lib/connectors"
 import { cn } from "@/lib/utils"
 
 // Every control on the filter row is set to one height, so the row reads as a
@@ -270,7 +273,9 @@ export function PostList({
       <Card className="min-h-0 w-full gap-0 py-0">
         <div className="flex shrink-0 items-center gap-4 border-b px-(--card-spacing) py-2 text-xs/relaxed text-muted-foreground">
           <span className="min-w-0 flex-1">Title</span>
-          <span className="w-24 shrink-0 text-center">Status</span>
+          {/* Wide enough for the longer of the two pills, so the column holds
+              still as rows switch between them. */}
+          <span className="w-32 shrink-0 text-center">Status</span>
           <span className="w-20 shrink-0 text-right">Updated</span>
         </div>
 
@@ -300,13 +305,42 @@ export function PostList({
                     <span className="min-w-0 flex-1 truncate text-xs/relaxed font-medium">
                       {post.title}
                     </span>
-                    <span className="flex w-24 shrink-0 justify-center">
+                    {/* Where a published post went used to be its own column.
+                        With HubSpot the only destination it never varied, so
+                        the mark moved into the pill and the column went: a
+                        column that reads the same on every row is width spent
+                        on nothing. The full phrase is still said once, for
+                        anyone hovering or listening. */}
+                    <span className="flex w-32 shrink-0 justify-center">
                       <Badge
                         variant={
                           post.status === "Published" ? "secondary" : "outline"
                         }
+                        // Published wears HubSpot's orange, the same colour as
+                        // the button that sent it there, so the pill and the
+                        // action read as the one destination.
+                        className={
+                          post.status === "Published"
+                            ? HUBSPOT.badge
+                            : undefined
+                        }
+                        title={
+                          post.status === "Published"
+                            ? `Published to ${HUBSPOT.name}`
+                            : undefined
+                        }
                       >
-                        {post.status}
+                        {post.status === "Published" ? (
+                          <>
+                            {/* The badge sizes its own icons, so the glyph
+                                takes no class of its own here. */}
+                            <PlatformGlyph platformId={HUBSPOT.id} />
+                            Published
+                            <span className="sr-only"> to {HUBSPOT.name}</span>
+                          </>
+                        ) : (
+                          "Draft"
+                        )}
                       </Badge>
                     </span>
 

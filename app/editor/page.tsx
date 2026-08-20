@@ -1,7 +1,8 @@
 import { cookies } from "next/headers"
 
-import { AppHeader } from "@/components/app-header"
+import { AppShell } from "@/components/app-shell"
 import { EditorWorkspace } from "@/components/editor/editor-workspace"
+import { CONNECTORS_COOKIE, isConnected } from "@/lib/connectors"
 import {
   parseKeywords,
   parseTargetCharacters,
@@ -58,16 +59,21 @@ export default async function EditorPage({
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
   )
+  const hubspotConnected = isConnected(
+    cookieStore.get(CONNECTORS_COOKIE)?.value,
+    "hubspot"
+  )
 
   return (
-    <div className="flex h-svh flex-col overflow-hidden">
-      <AppHeader
-        breadcrumbs={[
-          { label: "Home", href: "/dashboard" },
-          { label: post?.title ?? requestedTitle ?? "New draft" },
-        ]}
-      />
-
+    <AppShell
+      // Named for the section rather than for "Home": there are two products
+      // in this sidebar and each has a home, so one label pointing at both
+      // would say nothing about which one it goes to.
+      breadcrumbs={[
+        { label: "Blogger", href: "/blogger" },
+        { label: post?.title ?? requestedTitle ?? "New draft" },
+      ]}
+    >
       {/* Keyed per draft so switching posts resets the workspace state rather
           than carrying the previous post's title and body across. */}
       <EditorWorkspace
@@ -81,9 +87,10 @@ export default async function EditorPage({
         savedPost={
           post && { id: post.id, title: post.title, status: post.status }
         }
+        hubspotConnected={hubspotConnected}
         generateOnMount={shouldGenerate}
         requestedTitle={requestedTitle}
       />
-    </div>
+    </AppShell>
   )
 }

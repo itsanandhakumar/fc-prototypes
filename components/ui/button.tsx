@@ -38,7 +38,11 @@ const buttonVariants = cva(
         default: `h-8 gap-1 px-2 [--label-edge:0.5rem] ${LABEL_EDGE} text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-[1.15em] ${ICON_EDGE}`,
         xs: `h-6 gap-1 rounded-sm px-2 [--label-edge:0.5rem] ${LABEL_EDGE} text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-[0.85em] ${ICON_EDGE}`,
         sm: `h-7 gap-1 px-2 [--label-edge:0.5rem] ${LABEL_EDGE} text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-[1em] ${ICON_EDGE}`,
-        lg: `h-8 gap-1 px-2.5 [--label-edge:0.625rem] ${LABEL_EDGE} text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-[1.25em] ${ICON_EDGE}`,
+        // Taller than `default`, not just wider. Every `lg` in the app is a
+        // primary action at the end of something — publish, generate, sign in
+        // — and at the same height as the buttons around it the size only read
+        // as extra side padding, which made the label look wedged in.
+        lg: `h-9 gap-1 px-2.5 [--label-edge:0.625rem] ${LABEL_EDGE} text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-[1.25em] ${ICON_EDGE}`,
         icon: "size-8 [&_svg:not([class*='size-'])]:size-[1.15em]",
         "icon-xs":
           "size-6 rounded-sm [&_svg:not([class*='size-'])]:size-[0.85em]",

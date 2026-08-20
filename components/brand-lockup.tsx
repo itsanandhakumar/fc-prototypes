@@ -57,10 +57,14 @@ function BrandLockup({
   className,
   orientation = "inline",
   variant = "full",
+  /** The word set beside the mark. The product by default; the sidebar sets
+      the company name instead, since that is what the whole suite is. */
+  name = "Blogger",
 }: {
   className?: string
   orientation?: Orientation
   variant?: Variant
+  name?: string
 }) {
   const stacked = orientation === "stacked"
 
@@ -96,7 +100,7 @@ function BrandLockup({
                 "h-[1.39em] translate-y-[0.34em]"
         }
       />
-      Blogger
+      {name}
     </span>
   )
 }

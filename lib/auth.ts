@@ -2,7 +2,7 @@
 // `auth.ts` at the root — this file holds only what both the edge proxy and the
 // client components can safely import.
 
-export const HOME_ROUTE = "/dashboard"
+export const HOME_ROUTE = "/blogger"
 export const LOGIN_ROUTE = "/"
 
 // Auth.js names its session cookie by environment: the secure variant is only
@@ -12,6 +12,13 @@ export const SESSION_COOKIES = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
 ] as const
+
+// What to greet someone by. The first word of the name reads the way a person
+// would say it out loud; the studio accounts are named like people here, so
+// they come out the same way.
+export function greetingNameOf(name: string): string {
+  return name.split(/\s+/).filter(Boolean)[0] ?? name
+}
 
 export function initialsOf(name: string): string {
   return name

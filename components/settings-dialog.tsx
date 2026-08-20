@@ -2,14 +2,7 @@
 
 import * as React from "react"
 import { useTheme } from "next-themes"
-import {
-  LogOut,
-  Palette,
-  PenLine,
-  Plug,
-  Settings,
-  UserRound,
-} from "lucide-react"
+import { LogOut, Palette, PenLine, Plug, UserRound } from "lucide-react"
 
 import { logout } from "@/app/login-actions"
 import { setDefaultBodyView } from "@/app/settings-actions"
@@ -21,19 +14,17 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { initialsOf } from "@/lib/auth"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
-import { cn } from "@/lib/utils"
 
 const SECTIONS = [
-  { id: "account", label: "Account", icon: UserRound, disabled: false },
-  { id: "appearance", label: "Appearance", icon: Palette, disabled: false },
-  { id: "editor", label: "Editor", icon: PenLine, disabled: false },
-  // Not clickable until Studio ships the publishing workflow. It stays listed
-  // so the roadmap is visible, but selecting it would only show an empty panel.
-  { id: "connectors", label: "Connectors", icon: Plug, disabled: true },
+  { id: "account", label: "Account", icon: UserRound },
+  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "editor", label: "Editor", icon: PenLine },
+  // Live again: HubSpot is where a post publishes, and Social Studio will not
+  // post anywhere the account is not signed in to.
+  { id: "connectors", label: "Connectors", icon: Plug },
 ] as const
 
 type SectionId = (typeof SECTIONS)[number]["id"]
@@ -150,13 +141,22 @@ function AccountSection({
   )
 }
 
+// Controlled from the outside: the way in is the account menu at the foot of
+// the sidebar, so the dialog carries no trigger of its own.
 export function SettingsDialog({
+  open,
+  onOpenChange,
   defaultBodyView,
+  connectedIds,
   name,
   email,
   image,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   defaultBodyView: BodyView
+  /** Blog and social destinations this account has connected. */
+  connectedIds: string[]
   name: string
   email: string
   image: string | null
@@ -169,15 +169,7 @@ export function SettingsDialog({
   const [, startSaving] = React.useTransition()
 
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="icon" aria-label="Settings">
-            <Settings />
-          </Button>
-        }
-      />
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[80vh] max-h-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle>Settings</DialogTitle>
@@ -191,33 +183,17 @@ export function SettingsDialog({
             aria-label="Settings sections"
             className="flex w-44 shrink-0 flex-col gap-0.5 border-r p-2"
           >
-            {SECTIONS.map(({ id, label, icon: Icon, disabled }) => (
+            {SECTIONS.map(({ id, label, icon: Icon }) => (
               <Button
                 key={id}
                 type="button"
                 variant={section === id ? "secondary" : "ghost"}
                 aria-current={section === id ? "page" : undefined}
-                disabled={disabled}
-                title={disabled ? "Coming with Forward Studio" : undefined}
-                className={cn(
-                  "justify-start",
-                  // `disabled` already blocks the click; this is what stops the
-                  // pointer changing to a hand on the way past it.
-                  disabled && "pointer-events-none opacity-50"
-                )}
-                onClick={() => {
-                  if (!disabled) {
-                    setSection(id)
-                  }
-                }}
+                className="justify-start"
+                onClick={() => setSection(id)}
               >
                 <Icon />
                 {label}
-                {disabled ? (
-                  <span className="ml-auto text-[0.625rem] font-normal text-muted-foreground">
-                    Soon
-                  </span>
-                ) : null}
               </Button>
             ))}
           </nav>
@@ -266,9 +242,9 @@ export function SettingsDialog({
               </div>
             ) : null}
 
-            {/* Unreachable while the nav entry is disabled, but kept wired so
-                enabling the tab is a one-line change when Studio lands. */}
-            {section === "connectors" ? <ConnectorList /> : null}
+                        {section === "connectors" ? (
+              <ConnectorList connectedIds={connectedIds} />
+            ) : null}
           </div>
         </div>
       </DialogContent>

@@ -147,8 +147,12 @@ function spawnClaude({
   onEvent?: (event: ClaudeEvent) => void
 }): Promise<ClaudeRun> {
   return new Promise((resolve, reject) => {
+    // `turbopackIgnore` because the binary is resolved at runtime from
+    // CLAUDE_BIN. Without it the bundler's static analysis cannot tell what is
+    // being spawned, assumes the worst, and traces the entire project into the
+    // server bundle — every source file and the whole public folder.
     const child = spawn(
-      CLAUDE_BIN,
+      /* turbopackIgnore: true */ CLAUDE_BIN,
       [
         "-p",
         "--model",

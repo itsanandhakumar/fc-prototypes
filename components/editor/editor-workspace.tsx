@@ -11,9 +11,10 @@ import {
   Undo2,
 } from "lucide-react"
 
-import { publishPostAction, savePostAsDraft } from "@/app/editor-actions"
+import { savePostAsDraft } from "@/app/editor-actions"
 import { GenerationLog } from "@/components/editor/generation-log"
 import { PostIdeas } from "@/components/editor/post-ideas"
+import { PublishDialog } from "@/components/editor/publish-dialog"
 import { RichTextEditor } from "@/components/editor/rich-text-editor"
 import { TitleOptions } from "@/components/editor/title-options"
 import { Badge } from "@/components/ui/badge"
@@ -81,6 +82,7 @@ export function EditorWorkspace({
   initialView,
   brief,
   savedPost,
+  hubspotConnected,
   generateOnMount,
   requestedTitle,
 }: {
@@ -92,6 +94,8 @@ export function EditorWorkspace({
   brief: DraftBrief
   /** How this post stands in Your posts, if it is in there at all. */
   savedPost?: { id: string; title: string; status: PostStatus }
+  /** Whether there is a connected blog to publish to. */
+  hubspotConnected: boolean
   /** A fresh draft generates as soon as the editor is on screen. */
   generateOnMount: boolean
   /** Set when the draft is being written to a headline the writer chose. */
@@ -485,16 +489,18 @@ export function EditorWorkspace({
           >
             Save as draft
           </Button>
-          {/* Publishing marks the post finished in your own library. It does
-              not send it anywhere — that workflow belongs to Studio. */}
-          <Button
-            type="submit"
-            formAction={publishPostAction}
-            size="lg"
+          {/* Publishing hands the post to the connected blog. The dialog is
+              where the title, slug, author, tags and featured image are
+              confirmed before it goes. */}
+          <PublishDialog
+            postId={postId}
+            title={title}
+            body={body}
+            brief={brief}
+            insights={insights}
+            connected={hubspotConnected}
             disabled={running || !hasDraft}
-          >
-            Publish
-          </Button>
+          />
         </div>
       </div>
 

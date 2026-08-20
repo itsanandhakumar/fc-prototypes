@@ -1,10 +1,15 @@
-# Forward Blogger
+# Forward
 
-A blog-writing tool: you give it a brief, Claude writes the draft, and you edit
-it in Markdown or as rich text before saving it to your workspace.
+Two products in one app:
 
-This started as a static prototype (see git history). It is now functional —
-real accounts, a real database, and real generation.
+- **Blogger** — you give it a brief, Claude writes the draft, you edit it in
+  Markdown or as rich text, then publish it to your HubSpot blog.
+- **Social Studio** — turn a brief or an existing blog post into per-platform
+  social copy for LinkedIn and X, then post it now or schedule it.
+
+Blogger is functional: real accounts, a real database, real generation. Social
+Studio is still Anand's prototype — the UI is complete and the flow is real, but
+nothing is sent to LinkedIn or X yet. See **What is and isn't real** below.
 
 ## Setup
 
@@ -31,20 +36,44 @@ You also need the Claude Code CLI on `PATH`
 set `ANTHROPIC_API_KEY`; it shadows the subscription token and bills per token
 instead.
 
-## How it works
+Full walkthroughs live in `ai/guide/`: `tidb-cloud-setup.md` and
+`claude-cli-auth.md`.
 
-- **`/`** — log in or create an account. Google SSO and email/password both land
-  on the same user record, keyed by email.
-- **`/dashboard`** — your posts, filtered by status, recency and title.
+## The flow
+
+- **`/`** — log in or create an account. Google SSO and email/password land on
+  the same user record, keyed by email.
+- **`/blogger`** — your posts, filtered by status, recency and title.
 - **`/editor`** — the brief generates here. `?post=<id>` opens a stored post;
-  `?prompt=`/`?title=` opens an empty one that generates on arrival.
+  `?prompt=`/`?title=` opens an empty one that generates on arrival. Two ways
+  out: **Save as draft**, or **Publish to HubSpot**.
+- **`/socials`** — social posts, as a list or a calendar, with a summary strip.
+- **`/socials/versions`** — three drafts per platform, dealt as a deck.
+- **`/socials/editor`** — the chosen draft per platform, with live previews:
+  save as a draft, schedule it, or post it now.
+
+## What is and isn't real
+
+**Real** — accounts, sessions, the post database, blog generation, and the
+rich-text editor. Every post query is scoped by `userId`, which is also the
+whole authorisation model: a guessed post id returns nothing rather than someone
+else's draft.
+
+**Not real yet** — everything Social Studio sends, and the HubSpot hand-off.
+Publishing marks the post Published in your own database but calls no API. The
+social store is still an in-memory array (`lib/social-store.ts`) that resets when
+the dev server restarts, and its metrics are seeded.
+
+Making Social Studio real is mostly blocked outside the code: X posting needs a
+paid API tier, LinkedIn needs app review for `w_member_social`, and scheduling
+needs a worker process — which rules out serverless.
 
 ### Generation
 
 `POST /api/generate` streams newline-delimited JSON: one `{phase}` object per
-stage, then `{result}` or `{error}`. The generation log in the editor is driven
-off those phases, so it reports work that is actually happening rather than
-playing a timed animation.
+stage, then `{result}` or `{error}`. The editor's log is driven off those phases,
+so it reports work that is actually happening rather than playing a timed
+animation.
 
 The draft and its analysis — meta description, keyword coverage, gaps, alternate
 titles, follow-up ideas — come back from a single Claude call, so the analysis
@@ -58,14 +87,12 @@ so a malformed response gets one corrective retry).
 Two consequences worth knowing:
 
 - **Concurrency, not cost, is the ceiling.** A subscription is one seat, so
-  requests are gated — `CLAUDE_MAX_CONCURRENT` (default 2) with a queue. Past
-  the queue depth the editor says to try again shortly.
+  requests are gated — `CLAUDE_MAX_CONCURRENT` (default 2) with a queue. Past the
+  queue depth the editor says to try again shortly.
 - **Serverless will not work.** The CLI needs a real filesystem and a writable
   home directory. Deploy to a VPS or container, not Vercel.
 
-Swapping back to the HTTP API means changing those two files and nothing else —
-everything above them works against the same `generateDraft()` signature. See
-`guide/claude-cli-auth.md`.
+Swapping back to the HTTP API means changing those two files and nothing else.
 
 ### The editor
 
@@ -75,28 +102,23 @@ the same text as rich text, converting back to Markdown on every keystroke. The
 conversion is verified round-trip-stable for the subset the toolbar offers —
 headings, bold, italic, links, inline code, quotes, and both list kinds.
 
-### What is deliberately not here
-
-Publishing to LinkedIn/X/Bluesky/Threads/Mastodon. Per the 6 Aug 2026 call, that
-workflow — domain hosting, featured images, per-platform rewriting — belongs to
-the Studio product. Settings still lists the connectors, disabled, so the roadmap
-is visible. **Copy** is how a post leaves the app today.
-
-"Publish" marks a post finished in your own library. It does not send it
-anywhere.
-
 ## Data
 
 TiDB Cloud (MySQL-compatible) via Drizzle. Five tables: four the Auth.js adapter
 owns, plus `post`. No foreign keys — every read is scoped by `userId` in the
-query layer instead, which is also the whole authorisation model for posts.
+query layer instead.
 
 ```bash
-npm run db:push       # sync schema to the database (development)
 npm run db:generate   # write a migration to drizzle/
 npm run db:migrate    # apply migrations
 npm run db:studio     # browse the data
 ```
+
+> ⚠️ `npm run db:push` fails with `Multiple primary key defined` on this schema.
+> That is a drizzle-kit introspection bug with composite primary keys, not a
+> problem with your database — it does not see the existing keys on `account`
+> and `verificationToken` and tries to add them twice. Use `db:generate` +
+> `db:migrate` instead once the tables exist.
 
 ## Stack
 
