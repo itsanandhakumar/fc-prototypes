@@ -23,14 +23,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { initialsOf, type Account } from "@/lib/auth"
+import { initialsOf } from "@/lib/auth"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
+import { cn } from "@/lib/utils"
 
 const SECTIONS = [
-  { id: "account", label: "Account", icon: UserRound },
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "editor", label: "Editor", icon: PenLine },
-  { id: "connectors", label: "Connectors", icon: Plug },
+  { id: "account", label: "Account", icon: UserRound, disabled: false },
+  { id: "appearance", label: "Appearance", icon: Palette, disabled: false },
+  { id: "editor", label: "Editor", icon: PenLine, disabled: false },
+  // Not clickable until Studio ships the publishing workflow. It stays listed
+  // so the roadmap is visible, but selecting it would only show an empty panel.
+  { id: "connectors", label: "Connectors", icon: Plug, disabled: true },
 ] as const
 
 type SectionId = (typeof SECTIONS)[number]["id"]
@@ -97,27 +100,37 @@ function Segmented<Value extends string>({
 }
 
 function AccountSection({
-  accounts,
-  currentEmail,
+  name,
+  email,
+  image,
 }: {
-  accounts: Account[]
-  currentEmail: string
+  name: string
+  email: string
+  image: string | null
 }) {
-  const current = accounts.find((account) => account.email === currentEmail)
   const [pending, startPending] = React.useTransition()
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-          {current ? initialsOf(current.name) : "?"}
-        </span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-xs font-medium">
-            {current?.name ?? "Unknown account"}
+        {image ? (
+          // Google supplies an avatar; a password account has none, so the
+          // initials stand in rather than a broken image.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt=""
+            className="size-9 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+            {initialsOf(name) || "?"}
           </span>
+        )}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-xs font-medium">{name}</span>
           <span className="truncate text-xs text-muted-foreground">
-            {currentEmail}
+            {email}
           </span>
         </div>
       </div>
@@ -139,14 +152,14 @@ function AccountSection({
 
 export function SettingsDialog({
   defaultBodyView,
-  connectedIds,
-  accounts,
-  currentEmail,
+  name,
+  email,
+  image,
 }: {
   defaultBodyView: BodyView
-  connectedIds: string[]
-  accounts: Account[]
-  currentEmail: string
+  name: string
+  email: string
+  image: string | null
 }) {
   const [section, setSection] = React.useState<SectionId>("account")
   // `theme` is undefined until next-themes has read storage, which has happened
@@ -169,7 +182,7 @@ export function SettingsDialog({
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Account, appearance, editor and connector preferences.
+            Account, appearance and editor preferences.
           </DialogDescription>
         </DialogHeader>
 
@@ -178,24 +191,40 @@ export function SettingsDialog({
             aria-label="Settings sections"
             className="flex w-44 shrink-0 flex-col gap-0.5 border-r p-2"
           >
-            {SECTIONS.map(({ id, label, icon: Icon }) => (
+            {SECTIONS.map(({ id, label, icon: Icon, disabled }) => (
               <Button
                 key={id}
                 type="button"
                 variant={section === id ? "secondary" : "ghost"}
                 aria-current={section === id ? "page" : undefined}
-                className="justify-start"
-                onClick={() => setSection(id)}
+                disabled={disabled}
+                title={disabled ? "Coming with Forward Studio" : undefined}
+                className={cn(
+                  "justify-start",
+                  // `disabled` already blocks the click; this is what stops the
+                  // pointer changing to a hand on the way past it.
+                  disabled && "pointer-events-none opacity-50"
+                )}
+                onClick={() => {
+                  if (!disabled) {
+                    setSection(id)
+                  }
+                }}
               >
                 <Icon />
                 {label}
+                {disabled ? (
+                  <span className="ml-auto text-[0.625rem] font-normal text-muted-foreground">
+                    Soon
+                  </span>
+                ) : null}
               </Button>
             ))}
           </nav>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {section === "account" ? (
-              <AccountSection accounts={accounts} currentEmail={currentEmail} />
+              <AccountSection name={name} email={email} image={image} />
             ) : null}
 
             {section === "appearance" ? (
@@ -237,11 +266,9 @@ export function SettingsDialog({
               </div>
             ) : null}
 
-            {section === "connectors" ? (
-              <div className="flex flex-col gap-4">
-                <ConnectorList connectedIds={connectedIds} />
-              </div>
-            ) : null}
+            {/* Unreachable while the nav entry is disabled, but kept wired so
+                enabling the tab is a one-line change when Studio lands. */}
+            {section === "connectors" ? <ConnectorList /> : null}
           </div>
         </div>
       </DialogContent>

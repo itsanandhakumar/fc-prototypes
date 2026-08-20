@@ -1,18 +1,22 @@
 import { AppHeader } from "@/components/app-header"
 import { NewPostDialog } from "@/components/editor/new-post-dialog"
 import { PostList } from "@/components/post-list"
+import { displayNameOf } from "@/lib/auth"
 import { getPosts } from "@/lib/post-store"
+import { requireUser } from "@/lib/session"
 
 export default async function MainPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; posted?: string }>
+  searchParams: Promise<{ saved?: string }>
 }) {
-  // Set by Save and by Post in the editor, both of which land back here.
-  const { saved, posted } = await searchParams
-  const highlightedId = saved ?? posted
+  const user = await requireUser()
 
-  const posts = getPosts()
+  // Set by Save and by Publish in the editor, both of which land back here.
+  const { saved } = await searchParams
+
+  const posts = await getPosts(user.id)
+  const firstName = displayNameOf(user.name, user.email).split(" ")[0]
 
   return (
     <div className="flex h-svh flex-col overflow-hidden">
@@ -25,14 +29,14 @@ export default async function MainPage({
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-6">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-lg font-medium">
-            Welcome, this is your blog workspace.
+            Welcome {firstName}, this is your blog workspace.
           </h1>
           {/* The brief opens over the workspace, so a new post never leaves
               this page until there is a draft to edit. */}
           <NewPostDialog />
         </div>
 
-        <PostList posts={posts} highlightedId={highlightedId} />
+        <PostList posts={posts} highlightedId={saved} />
       </main>
     </div>
   )

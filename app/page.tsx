@@ -2,7 +2,11 @@
 
 import * as React from "react"
 
-import { loginWithGoogle, loginWithPassword } from "@/app/login-actions"
+import {
+  loginWithGoogle,
+  loginWithPassword,
+  registerWithPassword,
+} from "@/app/login-actions"
 import { BrandLockup } from "@/components/brand-lockup"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth"
 
 function GoogleIcon() {
   return (
@@ -40,10 +45,22 @@ function GoogleIcon() {
 }
 
 export default function LoginPage() {
-  const [state, formAction, isPending] = React.useActionState(
+  const [mode, setMode] = React.useState<"login" | "register">("login")
+  const registering = mode === "register"
+
+  // Each mode gets its own action state, so switching between them never
+  // carries the other one's error message across.
+  const [loginState, loginAction, loginPending] = React.useActionState(
     loginWithPassword,
     { error: null }
   )
+  const [registerState, registerAction, registerPending] = React.useActionState(
+    registerWithPassword,
+    { error: null }
+  )
+
+  const state = registering ? registerState : loginState
+  const isPending = registering ? registerPending : loginPending
 
   return (
     <div className="flex min-h-svh items-center justify-center px-4 py-10">
@@ -51,14 +68,37 @@ export default function LoginPage() {
         <BrandLockup orientation="stacked" className="text-sm font-medium" />
         <Card className="w-full">
           <CardHeader className="items-center gap-1 text-center">
-            <CardTitle>Log in to your account</CardTitle>
+            <CardTitle>
+              {registering ? "Create your account" : "Log in to your account"}
+            </CardTitle>
             <CardDescription>
-              Log in with your email and password to continue
+              {registering
+                ? "Use your email and a password to get started"
+                : "Log in with your email and password to continue"}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="flex flex-col gap-4">
-            <form className="flex flex-col gap-3" action={formAction}>
+            {/* Keyed per mode: the two forms hold different fields, so React
+                has to rebuild rather than reuse the inputs across a switch. */}
+            <form
+              key={mode}
+              className="flex flex-col gap-3"
+              action={registering ? registerAction : loginAction}
+            >
+              {registering ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    type="text"
+                    placeholder="Sam Okonkwo"
+                    autoComplete="name"
+                  />
+                </div>
+              ) : null}
+
               <div className="grid gap-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -75,19 +115,21 @@ export default function LoginPage() {
               <div className="grid gap-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <a
-                    href="#"
-                    className="text-xs/relaxed text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-                  >
-                    Forgot password?
-                  </a>
+                  {registering ? (
+                    <span className="text-xs/relaxed text-muted-foreground">
+                      {MIN_PASSWORD_LENGTH}+ characters
+                    </span>
+                  ) : null}
                 </div>
                 <Input
                   id="password"
                   name="password"
                   type="password"
                   placeholder="••••••••"
-                  autoComplete="current-password"
+                  autoComplete={
+                    registering ? "new-password" : "current-password"
+                  }
+                  minLength={registering ? MIN_PASSWORD_LENGTH : undefined}
                   aria-invalid={state.error ? true : undefined}
                   required
                 />
@@ -105,7 +147,7 @@ export default function LoginPage() {
                 className="mt-1 w-full"
                 disabled={isPending}
               >
-                Log in
+                {registering ? "Create account" : "Log in"}
               </Button>
             </form>
 
@@ -126,6 +168,17 @@ export default function LoginPage() {
                 Continue with Google
               </Button>
             </form>
+
+            <p className="text-center text-xs/relaxed text-muted-foreground">
+              {registering ? "Already have an account?" : "New to Forward?"}{" "}
+              <button
+                type="button"
+                onClick={() => setMode(registering ? "login" : "register")}
+                className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+              >
+                {registering ? "Log in" : "Create one"}
+              </button>
+            </p>
           </CardContent>
         </Card>
       </div>

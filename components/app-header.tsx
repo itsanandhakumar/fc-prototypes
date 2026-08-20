@@ -4,9 +4,9 @@ import { ChevronRight } from "lucide-react"
 
 import { BrandLockup } from "@/components/brand-lockup"
 import { SettingsDialog } from "@/components/settings-dialog"
-import { ACCOUNTS, SESSION_COOKIE } from "@/lib/auth"
-import { CONNECTORS_COOKIE, parseConnectedIds } from "@/lib/connectors"
+import { displayNameOf } from "@/lib/auth"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
+import { requireUser } from "@/lib/session"
 
 export type Crumb = { label: string; href?: string }
 
@@ -17,13 +17,10 @@ export async function AppHeader({
 }: {
   breadcrumbs?: Crumb[]
 }) {
+  const user = await requireUser()
   const cookieStore = await cookies()
-  const email = cookieStore.get(SESSION_COOKIE)?.value ?? ""
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
-  )
-  const connectedIds = parseConnectedIds(
-    cookieStore.get(CONNECTORS_COOKIE)?.value
   )
 
   return (
@@ -83,9 +80,9 @@ export async function AppHeader({
       <div className="flex shrink-0 items-center">
         <SettingsDialog
           defaultBodyView={defaultBodyView}
-          connectedIds={connectedIds}
-          accounts={ACCOUNTS}
-          currentEmail={email}
+          name={displayNameOf(user.name, user.email)}
+          email={user.email}
+          image={user.image}
         />
       </div>
     </header>

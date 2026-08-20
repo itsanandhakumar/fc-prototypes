@@ -4,13 +4,17 @@ import * as React from "react"
 import { Check, ChevronRight, Loader2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import type { GenerationStep } from "@/lib/generation-steps"
+import type { GenerationPhase, GenerationStep } from "@/lib/generation-steps"
 import { cn } from "@/lib/utils"
 
 // The running commentary while a draft is being written: one line per step,
 // each openable to show what that step actually looked at. Steps arrive in
 // order and stay on screen afterwards, so the finished draft can always be
 // traced back to what produced it.
+//
+// Which step is running is decided by the server, not by a timer here — the
+// endpoint emits a phase as it enters it, and `activePhase` is the last one
+// received. A step that takes a minute shows as running for a minute.
 
 function StepRow({
   step,
@@ -115,45 +119,28 @@ function StepRow({
 
 export function GenerationLog({
   steps,
-  onComplete,
-  autoPlay = true,
+  activePhase,
 }: {
   steps: GenerationStep[]
-  onComplete?: () => void
-  /** Off when the log is being read back after the fact. */
-  autoPlay?: boolean
+  /** The phase currently running, or null when the run has finished. */
+  activePhase: GenerationPhase | null
 }) {
-  const [index, setIndex] = React.useState(autoPlay ? 0 : steps.length)
   const [open, setOpen] = React.useState<string | null>(null)
   const listRef = React.useRef<HTMLOListElement>(null)
-  const done = useLatest(onComplete)
 
-  React.useEffect(() => {
-    if (!autoPlay) {
-      return
-    }
-
-    if (index >= steps.length) {
-      done.current?.()
-      return
-    }
-
-    const timer = setTimeout(
-      () => setIndex((current) => current + 1),
-      steps[index].ms
-    )
-    return () => clearTimeout(timer)
-  }, [autoPlay, done, index, steps])
+  const activeIndex = activePhase
+    ? steps.findIndex((step) => step.id === activePhase)
+    : steps.length
 
   // Keep the newest step in view without dragging the whole panel around.
   React.useEffect(() => {
-    if (autoPlay && listRef.current) {
+    if (activePhase && listRef.current) {
       listRef.current.lastElementChild?.scrollIntoView({
         block: "nearest",
         behavior: "smooth",
       })
     }
-  }, [autoPlay, index])
+  }, [activePhase])
 
   return (
     <ol ref={listRef} className="flex flex-col">
@@ -162,9 +149,9 @@ export function GenerationLog({
           key={step.id}
           step={step}
           state={
-            position < index
+            position < activeIndex
               ? "done"
-              : position === index
+              : position === activeIndex
                 ? "running"
                 : "pending"
           }
@@ -176,14 +163,4 @@ export function GenerationLog({
       ))}
     </ol>
   )
-}
-
-// The callback changes identity on every parent render; the effect must not
-// restart the timer because of that.
-function useLatest<T>(value: T) {
-  const ref = React.useRef(value)
-  React.useEffect(() => {
-    ref.current = value
-  })
-  return ref
 }

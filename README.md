@@ -1,65 +1,115 @@
-# Blogger prototype
+# Forward Blogger
 
-A working prototype of a blog-writing tool: you give it a brief, it writes a
-draft, and it composes the social posts that go out with it. Everything runs
-locally with no backend — there is no model call, no OAuth, and no database.
+A blog-writing tool: you give it a brief, Claude writes the draft, and you edit
+it in Markdown or as rich text before saving it to your workspace.
 
-Extracted from the `forward-blog-intelligence` branch of `forward-pro`, where it
-was built as an orphan branch with no shared history with that app.
+This started as a static prototype (see git history). It is now functional —
+real accounts, a real database, and real generation.
 
-## Running it
+## Setup
 
 ```bash
 npm install
+cp .env.example .env.local   # then fill it in — see below
+npm run db:push              # create the tables in TiDB
 npm run dev
 ```
 
-Then open http://localhost:3000.
+Then open http://localhost:3000 and create an account.
 
-Sign in with any of the demo accounts (`lib/auth.ts`), password `forward`:
+### What you need in `.env.local`
 
-| Email | Who |
+| Variable | Where it comes from |
 | --- | --- |
-| `demo@forward.tools` | Sam Okonkwo — Forward, House blog |
-| `editor@forward.tools` | Priya Raman — Forward, Client work |
-| `agency@northbound.co` | Northbound Studio — Northbound, Retainer |
+| `DATABASE_URL` | TiDB Cloud → your cluster → **Connect** → General. Append `/<database>` to the path. |
+| `AUTH_SECRET` | `npx auth secret` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud → Credentials → OAuth client ID (Web application). Redirect URI: `http://localhost:3000/api/auth/callback/google` |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Run `claude setup-token` |
 
-Nothing is reachable before login — `proxy.ts` redirects every other route back
-to `/`.
+You also need the Claude Code CLI on `PATH`
+(`npm i -g @anthropic-ai/claude-code`) — generation shells out to it. Do **not**
+set `ANTHROPIC_API_KEY`; it shadows the subscription token and bills per token
+instead.
 
-## The flow
+## How it works
 
-- **`/`** — login
-- **`/dashboard`** — the workspace's posts, drafts and published
-- **`/new`** — the brief: topic, angle, audience, attachments, target platforms
-- **`/editor`** — the generation log plays back while the draft is written, then
-  the composer, title options, and per-platform social previews
+- **`/`** — log in or create an account. Google SSO and email/password both land
+  on the same user record, keyed by email.
+- **`/dashboard`** — your posts, filtered by status, recency and title.
+- **`/editor`** — the brief generates here. `?post=<id>` opens a stored post;
+  `?prompt=`/`?title=` opens an empty one that generates on arrival.
 
-## How the prototype fakes its work
+### Generation
 
-- `lib/draft-generator.ts` writes the draft from the brief. Deterministic, no
-  model runs.
-- `lib/generation-steps.ts` is the log shown during generation. Every line is
-  read back off the brief, the finished draft, or the posts already in the
-  workspace — nothing is invented for the sake of having something to show.
-- `lib/post-store.ts` is the store: an in-memory array seeded from
-  `lib/blog-data.ts`. **Saves survive navigation but reset when the dev server
-  restarts.**
-- `lib/connectors.ts` holds each platform's real composing rules and brand
-  chrome, so the previews look like the network they are previewing. Connecting
-  an account is mocked.
+`POST /api/generate` streams newline-delimited JSON: one `{phase}` object per
+stage, then `{result}` or `{error}`. The generation log in the editor is driven
+off those phases, so it reports work that is actually happening rather than
+playing a timed animation.
+
+The draft and its analysis — meta description, keyword coverage, gaps, alternate
+titles, follow-up ideas — come back from a single Claude call, so the analysis
+always describes the draft that shipped.
+
+That call goes through the **Claude Code CLI**, not the HTTP API, so it bills
+against a Claude subscription. `lib/ai/claude-cli.ts` spawns `claude -p` and
+`lib/ai/blog.ts` validates the JSON it returns (the CLI cannot enforce a schema,
+so a malformed response gets one corrective retry).
+
+Two consequences worth knowing:
+
+- **Concurrency, not cost, is the ceiling.** A subscription is one seat, so
+  requests are gated — `CLAUDE_MAX_CONCURRENT` (default 2) with a queue. Past
+  the queue depth the editor says to try again shortly.
+- **Serverless will not work.** The CLI needs a real filesystem and a writable
+  home directory. Deploy to a VPS or container, not Vercel.
+
+Swapping back to the HTTP API means changing those two files and nothing else —
+everything above them works against the same `generateDraft()` signature. See
+`guide/claude-cli-auth.md`.
+
+### The editor
+
+Markdown is the canonical form: it is what Claude writes, what is stored, and
+what **Copy Markdown** hands over. The Preview tab is a Tiptap surface editing
+the same text as rich text, converting back to Markdown on every keystroke. The
+conversion is verified round-trip-stable for the subset the toolbar offers —
+headings, bold, italic, links, inline code, quotes, and both list kinds.
+
+### What is deliberately not here
+
+Publishing to LinkedIn/X/Bluesky/Threads/Mastodon. Per the 6 Aug 2026 call, that
+workflow — domain hosting, featured images, per-platform rewriting — belongs to
+the Studio product. Settings still lists the connectors, disabled, so the roadmap
+is visible. **Copy** is how a post leaves the app today.
+
+"Publish" marks a post finished in your own library. It does not send it
+anywhere.
+
+## Data
+
+TiDB Cloud (MySQL-compatible) via Drizzle. Five tables: four the Auth.js adapter
+owns, plus `post`. No foreign keys — every read is scoped by `userId` in the
+query layer instead, which is also the whole authorisation model for posts.
+
+```bash
+npm run db:push       # sync schema to the database (development)
+npm run db:generate   # write a migration to drizzle/
+npm run db:migrate    # apply migrations
+npm run db:studio     # browse the data
+```
 
 ## Stack
 
-Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui on Base UI
-(`components.json` preset), themed via `next-themes`.
+Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui on Base UI ·
+Auth.js v5 · Drizzle + TiDB Cloud · Tiptap · Claude Code CLI (`claude-opus-5`)
 
 ```bash
-npm run typecheck   # tsc --noEmit
+npm run typecheck
 npm run lint
 npm run build
-npm run format      # prettier
+npm run format
 ```
 
 Read `AGENTS.md` before writing code — this Next.js version has breaking changes
-from what a model is likely to have been trained on.
+from what a model is likely to have been trained on. Notably: route protection
+lives in `proxy.ts`, not `middleware.ts`.

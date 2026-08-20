@@ -156,3 +156,72 @@
     @apply font-sans;
   }
 }
+
+/* The rendered post inside the rich-text editor.
+ *
+ * These match the read-only preview the prototype shipped with: 28 / 22 / 18px
+ * headings against 14px body copy, with each level taking more air above it
+ * than the one below — which is what makes a subsection read as belonging to
+ * the section it follows. Tiptap renders bare tags, so the spacing has to be
+ * declared here rather than as utility classes on the elements. */
+@layer components {
+  .forward-prose {
+    @apply flex flex-col gap-3 text-xs/relaxed;
+  }
+  .forward-prose > :first-child {
+    @apply mt-0;
+  }
+  .forward-prose h1 {
+    @apply mt-8 font-heading text-2xl font-medium tracking-tight;
+  }
+  .forward-prose h2 {
+    @apply mt-6 font-heading text-xl font-medium tracking-tight;
+  }
+  .forward-prose h3 {
+    @apply mt-3 font-heading text-base font-medium;
+  }
+  .forward-prose strong {
+    @apply font-medium text-foreground;
+  }
+  .forward-prose ul,
+  .forward-prose ol {
+    @apply flex flex-col gap-1.5 pl-4;
+  }
+  .forward-prose ul {
+    @apply list-disc;
+  }
+  .forward-prose ol {
+    @apply list-decimal;
+  }
+  .forward-prose li {
+    @apply pl-1;
+  }
+  /* A list item's paragraph is a block in the document model but should not
+     read as one — without this every bullet gains a line of space. */
+  .forward-prose li > p {
+    @apply m-0;
+  }
+  .forward-prose blockquote {
+    @apply border-l-2 border-border pl-3 text-muted-foreground;
+  }
+  .forward-prose code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.9em];
+  }
+  .forward-prose pre {
+    @apply overflow-x-auto rounded-md bg-muted p-3 font-mono text-[0.9em];
+  }
+  .forward-prose pre code {
+    @apply bg-transparent p-0;
+  }
+  .forward-prose a {
+    @apply underline underline-offset-4;
+  }
+  .forward-prose hr {
+    @apply border-border;
+  }
+  /* ProseMirror gives an empty document almost no height, so a blank post
+     would leave nothing to click into. */
+  .forward-prose.ProseMirror {
+    @apply min-h-40;
+  }
+}

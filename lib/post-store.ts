@@ -1,116 +1,148 @@
-import { blogPosts, type BlogPost } from "@/lib/blog-data"
-import { orderPlatformIds } from "@/lib/connectors"
-import type { DraftBrief } from "@/lib/draft-generator"
+import "server-only"
 
-// Prototype storage: in memory, seeded from the mock posts. Saves survive
-// navigation but reset when the dev server restarts.
-let posts: BlogPost[] = [...blogPosts]
+import { and, desc, eq } from "drizzle-orm"
 
-export function getPosts(): BlogPost[] {
-  return posts
+import type { BlogPost, PostStatus } from "@/lib/blog-data"
+import { db } from "@/lib/db"
+import {
+  posts,
+  type PostRow,
+  type StoredBrief,
+  type StoredInsights,
+} from "@/lib/db/schema"
+
+// Every function here takes a `userId` and every query filters on it. That is
+// the whole authorisation model for posts: there is no path to a row that does
+// not go through the owner's id, so a guessed post id returns nothing rather
+// than someone else's draft.
+
+const MS_PER_MINUTE = 60_000
+
+function toBlogPost(row: PostRow): BlogPost {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status === "published" ? "Published" : "Draft",
+    // Negative would mean a row stamped in the future by clock skew between
+    // the app and TiDB; clamping keeps "Just now" from becoming "-2m ago".
+    updatedMinutesAgo: Math.max(
+      0,
+      Math.round((Date.now() - row.updatedAt.getTime()) / MS_PER_MINUTE)
+    ),
+    body: row.body,
+    brief: row.brief ?? undefined,
+    insights: row.insights ?? undefined,
+  }
 }
 
-// An absent or unknown id means a new, blank post.
-export function getPost(id: string | undefined): BlogPost | undefined {
+export async function getPosts(userId: string): Promise<BlogPost[]> {
+  const rows = await db
+    .select()
+    .from(posts)
+    .where(eq(posts.userId, userId))
+    .orderBy(desc(posts.updatedAt))
+
+  return rows.map(toBlogPost)
+}
+
+/** An absent or unknown id means a new, blank post. */
+export async function getPost(
+  userId: string,
+  id: string | undefined
+): Promise<BlogPost | undefined> {
   if (!id) {
     return undefined
   }
-  return posts.find((post) => post.id === id)
+
+  const [row] = await db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .limit(1)
+
+  return row ? toBlogPost(row) : undefined
 }
 
 // Only ever used to make way for a replacement draft, so a published post is
 // never removed — the writer would have no way to get it back.
-export function deleteDraft(id: string): boolean {
-  const existing = getPost(id)
-  if (!existing || existing.status !== "Draft") {
+export async function deleteDraft(
+  userId: string,
+  id: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ status: posts.status })
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
+    .limit(1)
+
+  if (!row || row.status !== "draft") {
     return false
   }
 
-  posts = posts.filter((post) => post.id !== id)
+  await db.delete(posts).where(and(eq(posts.id, id), eq(posts.userId, userId)))
   return true
 }
 
-function slugify(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60)
-
-  return slug || "untitled-post"
-}
-
-function uniqueId(title: string): string {
-  const base = slugify(title)
-  let id = base
-  let suffix = 2
-  while (posts.some((post) => post.id === id)) {
-    id = `${base}-${suffix}`
-    suffix += 1
-  }
-  return id
-}
-
-// Publishing commits the current text and records where it went. Like saving,
-// it upserts, so a draft that has never been saved can be posted directly.
-export function publishPost({
-  id,
-  title,
-  body,
-  platforms,
-  brief,
-}: {
+type SaveInput = {
+  userId: string
   id?: string
   title: string
   body: string
-  platforms: string[]
-  /** The brief the draft came from, kept with the post. */
-  brief?: DraftBrief
-}): BlogPost {
-  const existing = getPost(id)
-
-  const published: BlogPost = {
-    id: existing?.id ?? uniqueId(title),
-    title,
-    body,
-    status: "Published",
-    updatedMinutesAgo: 0,
-    publishedTo: orderPlatformIds([
-      ...new Set([...(existing?.publishedTo ?? []), ...platforms]),
-    ]),
-    brief: brief ?? existing?.brief,
-  }
-
-  posts = [published, ...posts.filter((post) => post.id !== published.id)]
-
-  return published
+  status: PostStatus
+  brief?: StoredBrief
+  insights?: StoredInsights
 }
 
-// Saving always stores a draft, freshly updated, at the top of the list.
-export function saveDraft({
+// One upsert for both Save and Publish — they differ only in the status they
+// write. An id that is absent, unknown, or owned by someone else falls through
+// to an insert, so a save can never overwrite another account's post.
+export async function savePost({
+  userId,
   id,
   title,
   body,
+  status,
   brief,
-}: {
-  id?: string
-  title: string
-  body: string
-  /** The brief the draft came from, kept with the post. */
-  brief?: DraftBrief
-}): BlogPost {
-  const existing = getPost(id)
+  insights,
+}: SaveInput): Promise<BlogPost> {
+  const dbStatus = status === "Published" ? "published" : "draft"
+  const existing = id ? await getPost(userId, id) : undefined
 
-  const saved: BlogPost = {
-    id: existing?.id ?? uniqueId(title),
-    title,
-    body,
-    status: "Draft",
-    updatedMinutesAgo: 0,
-    brief: brief ?? existing?.brief,
+  if (existing) {
+    await db
+      .update(posts)
+      .set({
+        title,
+        body,
+        status: dbStatus,
+        // A save that carries no fresh analysis leaves the stored one alone
+        // rather than blanking the panel.
+        ...(brief ? { brief } : {}),
+        ...(insights ? { insights } : {}),
+      })
+      .where(and(eq(posts.id, existing.id), eq(posts.userId, userId)))
+
+    const saved = await getPost(userId, existing.id)
+    if (!saved) {
+      throw new Error(`Post ${existing.id} vanished during save.`)
+    }
+    return saved
   }
 
-  posts = [saved, ...posts.filter((post) => post.id !== saved.id)]
+  const newId = crypto.randomUUID()
+  await db.insert(posts).values({
+    id: newId,
+    userId,
+    title,
+    body,
+    status: dbStatus,
+    brief: brief ?? null,
+    insights: insights ?? null,
+  })
 
-  return saved
+  const created = await getPost(userId, newId)
+  if (!created) {
+    throw new Error("Insert succeeded but the post could not be read back.")
+  }
+  return created
 }

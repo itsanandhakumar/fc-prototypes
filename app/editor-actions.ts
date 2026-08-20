@@ -3,29 +3,23 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
-import {
-  generateBody,
-  parseKeywords,
-  parseTargetCharacters,
-  type DraftBrief,
-} from "@/lib/draft-generator"
-import { deleteDraft, saveDraft } from "@/lib/post-store"
+import type { PostStatus } from "@/lib/blog-data"
+import type { StoredInsights } from "@/lib/db/schema"
+import { parseKeywords, parseTargetCharacters } from "@/lib/draft-generator"
+import { deleteDraft, savePost } from "@/lib/post-store"
+import { requireUser } from "@/lib/session"
 
-// The brief travels to the editor on the URL; the draft is generated there and
-// only enters the store once the writer saves it.
+// The brief travels to the editor on the URL; the draft is written there, by
+// the streaming generate endpoint, and only enters the database once the writer
+// saves it. Nothing is stored on the way through.
 export async function generateFromPrompt(formData: FormData) {
+  await requireUser()
+
   const params = new URLSearchParams()
 
-  // Either of these can carry the draft; keeping empties out of the URL means
-  // the editor can tell which one the writer actually gave.
   const prompt = String(formData.get("prompt") ?? "").trim()
   if (prompt) {
     params.set("prompt", prompt)
-  }
-
-  const title = String(formData.get("title") ?? "").trim()
-  if (title) {
-    params.set("title", title)
   }
 
   const keywords = String(formData.get("keywords") ?? "").trim()
@@ -38,57 +32,78 @@ export async function generateFromPrompt(formData: FormData) {
   redirect(`/editor?${params.toString()}`)
 }
 
-// Picking an alternate title creates a *separate* post and opens it. Whatever
+// Picking a suggested post idea starts a *separate* post and opens it. Whatever
 // was being edited is left exactly as it was, unless the writer asked for the
 // draft they were on to be replaced — `deleteDraft` refuses to touch anything
 // published, so only a draft can ever be swapped out this way.
+//
+// The new post is not written here: the editor opens with the title on the URL
+// and generates through the same streaming path as any other draft, so the
+// writer watches it being written instead of waiting on a blank screen.
 export async function createPostFromTitle(
   title: string,
   replaceDraftId?: string
 ) {
+  const user = await requireUser()
+
   if (replaceDraftId) {
-    deleteDraft(replaceDraftId)
+    await deleteDraft(user.id, replaceDraftId)
+    revalidatePath("/dashboard")
   }
 
-  const brief: DraftBrief = {
-    brief: title,
-    title,
-    keywords: [],
-    targetCharacters: 4800,
-    target: "both",
-  }
-
-  const created = saveDraft({
-    title,
-    body: generateBody(brief),
-    brief,
-  })
-
-  revalidatePath("/dashboard")
-  redirect(`/editor?post=${encodeURIComponent(created.id)}`)
+  redirect(`/editor?title=${encodeURIComponent(title)}`)
 }
 
-export async function savePostAsDraft(formData: FormData) {
-  const title = String(formData.get("title") ?? "")
+function readInsights(formData: FormData): StoredInsights | undefined {
+  const raw = String(formData.get("insights") ?? "")
+  if (!raw) {
+    return undefined
+  }
+  try {
+    return JSON.parse(raw) as StoredInsights
+  } catch {
+    // A save must not fail because the panel's cached analysis was malformed —
+    // the post is the thing worth keeping.
+    return undefined
+  }
+}
 
-  const saved = saveDraft({
+async function save(formData: FormData, status: PostStatus) {
+  const user = await requireUser()
+
+  const title = String(formData.get("title") ?? "").trim() || "Untitled post"
+
+  const saved = await savePost({
+    userId: user.id,
     id: String(formData.get("postId") ?? "") || undefined,
     title,
     body: String(formData.get("body") ?? ""),
-    // Kept with the post so the editor can still say how it was made.
+    status,
+    // Kept with the post so the editor can still say how it was made, and so
+    // Regenerate honours the instructions the draft came from.
     brief: {
       brief: String(formData.get("brief") ?? "") || title,
-      title,
       keywords: parseKeywords(String(formData.get("keywords") ?? "")),
       targetCharacters: parseTargetCharacters(
         String(formData.get("chars") ?? "")
       ),
-      target: "both",
     },
+    insights: readInsights(formData),
   })
 
   revalidatePath("/dashboard")
-  // Saving hands the writer back to the list, with the draft they just saved
+  // Saving hands the writer back to the list, with the post they just saved
   // called out at the top of it.
   redirect(`/dashboard?saved=${encodeURIComponent(saved.id)}`)
+}
+
+export async function savePostAsDraft(formData: FormData) {
+  await save(formData, "Draft")
+}
+
+// "Published" marks the post finished in the writer's own library. It does not
+// send it anywhere — the social publishing workflow is deferred to Studio, so
+// there is no network call behind this.
+export async function publishPostAction(formData: FormData) {
+  await save(formData, "Published")
 }

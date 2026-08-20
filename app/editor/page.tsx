@@ -1,24 +1,20 @@
 import { cookies } from "next/headers"
 
-import { savePostAsDraft } from "@/app/editor-actions"
 import { AppHeader } from "@/components/app-header"
 import { EditorWorkspace } from "@/components/editor/editor-workspace"
 import {
-  generateDraft,
   parseKeywords,
   parseTargetCharacters,
   type DraftBrief,
 } from "@/lib/draft-generator"
-import { CONNECTORS_COOKIE, connectedPlatforms } from "@/lib/connectors"
-import { getInsights } from "@/lib/post-insights"
-import { subjectOf, topicFromTitle } from "@/lib/draft-generator"
-import { buildGenerationSteps } from "@/lib/generation-steps"
-import { getPost, getPosts } from "@/lib/post-store"
+import { getPost } from "@/lib/post-store"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
+import { requireUser } from "@/lib/session"
 
-// One editor route, two arrival paths: `?post=<id>` opens an existing post,
-// `?prompt=<text>` opens a freshly generated draft that is not stored until
-// the writer saves it.
+// One editor route, two arrival paths: `?post=<id>` opens a stored post, and a
+// `?prompt=`/`?title=` pair opens an empty editor that generates on mount. The
+// generation itself happens client-side against `/api/generate` so the writer
+// watches it stream rather than waiting on a blank server render.
 export default async function EditorPage({
   searchParams,
 }: {
@@ -30,61 +26,37 @@ export default async function EditorPage({
     chars?: string
   }>
 }) {
+  const user = await requireUser()
   const params = await searchParams
-  const { post: postId, prompt } = params
 
-  const post = getPost(postId)
+  const post = await getPost(user.id, params.post)
 
   // The brief the draft was generated from, so Regenerate can honour the same
-  // instructions. A stored post keeps its own brief; one saved before briefs
-  // were kept falls back to its title.
+  // instructions. A stored post keeps its own; one saved before briefs were
+  // kept falls back to its title.
   const brief: DraftBrief = post
     ? (post.brief ?? {
         brief: post.title,
-        title: post.title,
         keywords: [],
         targetCharacters: post.body.length,
-        target: "both",
       })
     : {
-        brief: prompt ?? "",
-        title: params.title,
+        brief: params.prompt ?? "",
         keywords: parseKeywords(params.keywords ?? ""),
         targetCharacters: parseTargetCharacters(params.chars),
-        target: "both",
       }
 
-  // A brief, a title, or both — any of them is enough to generate from.
-  const generated =
-    !post && (prompt || params.title) ? generateDraft(brief) : undefined
+  // A title with no post behind it is a suggested idea being turned into a
+  // draft: the generator is told to keep the headline and write to it.
+  const requestedTitle = post ? undefined : params.title?.trim() || undefined
 
-  const title = post?.title ?? generated?.title ?? ""
-  const body = post?.body ?? generated?.body ?? ""
-
-  // Everything in the panel describes the draft, so an empty editor has
-  // nothing to show.
-  const insights = title || body ? getInsights(title, body) : undefined
-
-  // Every post carries its run, not just the one being written: a fresh draft
-  // plays it, a saved one keeps it available to read back.
-  const relatedPosts = relatedTitles(title || brief.brief, post?.id)
-  const steps =
-    insights && (title || body)
-      ? buildGenerationSteps({
-          brief,
-          title,
-          body,
-          insights,
-          relatedPosts,
-        })
-      : []
+  // Nothing to generate from means an empty editor, which is a valid state —
+  // the writer can still type a post by hand.
+  const shouldGenerate = !post && Boolean(brief.brief || requestedTitle)
 
   const cookieStore = await cookies()
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
-  )
-  const connected = connectedPlatforms(
-    cookieStore.get(CONNECTORS_COOKIE)?.value
   )
 
   return (
@@ -92,66 +64,26 @@ export default async function EditorPage({
       <AppHeader
         breadcrumbs={[
           { label: "Home", href: "/dashboard" },
-          { label: title || "New draft" },
+          { label: post?.title ?? requestedTitle ?? "New draft" },
         ]}
       />
 
-      <form
-        action={savePostAsDraft}
-        className="flex min-h-0 flex-1 gap-4 overflow-hidden p-6"
-      >
-        <input type="hidden" name="postId" value={post?.id ?? ""} />
-
-        {/* The brief rides along with the save so the stored post keeps the
-            instructions it was written from. */}
-        <input type="hidden" name="brief" value={brief.brief} />
-        <input type="hidden" name="keywords" value={brief.keywords.join(", ")} />
-        <input
-          type="hidden"
-          name="chars"
-          value={String(brief.targetCharacters)}
-        />
-
-        {/* Keyed per draft so switching posts resets the workspace state. */}
-        <EditorWorkspace
-          key={`${post?.id ?? ""}|${prompt ?? ""}|${params.title ?? ""}|${params.chars ?? ""}`}
-          initialTitle={title}
-          initialBody={body}
-          initialInsights={insights}
-          initialView={defaultBodyView}
-          brief={{ ...brief, title }}
-          postId={post?.id ?? ""}
-          savedPost={
-            post && { id: post.id, title: post.title, status: post.status }
-          }
-          connectedPlatforms={connected}
-          steps={steps}
-          relatedPosts={relatedPosts}
-          generating={Boolean(generated)}
-        />
-      </form>
+      {/* Keyed per draft so switching posts resets the workspace state rather
+          than carrying the previous post's title and body across. */}
+      <EditorWorkspace
+        key={`${post?.id ?? ""}|${params.prompt ?? ""}|${requestedTitle ?? ""}|${params.chars ?? ""}`}
+        postId={post?.id ?? ""}
+        initialTitle={post?.title ?? requestedTitle ?? ""}
+        initialBody={post?.body ?? ""}
+        initialInsights={post?.insights}
+        initialView={defaultBodyView}
+        brief={brief}
+        savedPost={
+          post && { id: post.id, title: post.title, status: post.status }
+        }
+        generateOnMount={shouldGenerate}
+        requestedTitle={requestedTitle}
+      />
     </div>
   )
-}
-
-// Posts already in the workspace that share the subject of the draft. Real
-// rows, so the step that claims to have read them is telling the truth. The
-// post being edited is never one of its own neighbours.
-function relatedTitles(source: string, selfId?: string): string[] {
-  const subject = subjectOf(topicFromTitle(source)).toLowerCase()
-  const terms = subject.split(/\s+/).filter((word) => word.length > 3)
-  if (!terms.length) {
-    return []
-  }
-
-  return getPosts()
-    .filter((post) => {
-      if (post.id === selfId) {
-        return false
-      }
-      const haystack = post.title.toLowerCase()
-      return terms.some((term) => haystack.includes(term))
-    })
-    .slice(0, 3)
-    .map((post) => post.title)
 }
