@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { initialsOf } from "@/lib/auth"
+import { CONNECTORS_ENABLED } from "@/lib/release"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
 
 const SECTIONS = [
@@ -23,9 +24,12 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "editor", label: "Editor", icon: PenLine },
   // Live again: HubSpot is where a post publishes, and Social Studio will not
-  // post anywhere the account is not signed in to.
-  { id: "connectors", label: "Connectors", icon: Plug },
-] as const
+  // post anywhere the account is not signed in to. Absent entirely in the
+  // blogger-only release, where there is nothing to connect.
+  ...(CONNECTORS_ENABLED
+    ? [{ id: "connectors" as const, label: "Connectors", icon: Plug }]
+    : []),
+]
 
 type SectionId = (typeof SECTIONS)[number]["id"]
 

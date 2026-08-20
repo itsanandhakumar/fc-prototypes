@@ -78,10 +78,13 @@ and at 280 rather than three unrelated posts about the same subject. Each is
 checked against the platform's limit before it is offered.
 
 **Not real yet** — sending to LinkedIn and X. Publishing a social post records
-it without calling any network, which is blocked outside the code: LinkedIn
-needs an app approved for `w_member_social`, X needs a paid API tier. Settings
-shows both as "Awaiting API access" rather than offering a button that cannot
-finish.
+it without calling any network. What is missing is credentials, not permission:
+neither platform requires approval to post on behalf of a signed-in user
+(`w_member_social` is one of LinkedIn's open permissions, and X now sells access
+per call rather than by tier), but both need a registered app, which needs a
+privacy policy and a production redirect URL. Settings shows both as "Awaiting
+API access" rather than offering a button that cannot finish. The requirements,
+costs and blockers are written up in `ai/guide/api-approvals.md`.
 
 ### Generation
 

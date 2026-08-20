@@ -4,6 +4,7 @@ import { GenerationBusy, GenerationRefused } from "@/lib/ai/claude-cli"
 import { generateSocialVersions, type SocialSource } from "@/lib/ai/social"
 import { parsePlatformIds } from "@/lib/social-flow"
 import { getPost } from "@/lib/post-store"
+import { SOCIALS_ENABLED } from "@/lib/release"
 import { currentUser } from "@/lib/session"
 
 // Same shape as `/api/generate`: newline-delimited JSON, one `{phase}` per
@@ -15,6 +16,13 @@ export const maxDuration = 300
 type Line = { phase: string } | { result: unknown } | { error: string }
 
 export async function POST(request: Request) {
+  // The UI is gated in the blogger-only release, but a route left open is
+  // still a route: it would spend the account's Claude quota on a feature this
+  // build does not ship.
+  if (!SOCIALS_ENABLED) {
+    return NextResponse.json({ error: "Not available." }, { status: 404 })
+  }
+
   const user = await currentUser()
   if (!user) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 })

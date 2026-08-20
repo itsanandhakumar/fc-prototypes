@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell"
 import { VersionDeck } from "@/components/socials/version-deck"
 import { PLATFORMS } from "@/lib/connectors"
 import { getPost } from "@/lib/post-store"
+import { SOCIALS_ENABLED } from "@/lib/release"
 import { requireUser } from "@/lib/session"
 import { nameOf, parsePlatformIds, type PostSource } from "@/lib/social-flow"
 
@@ -23,6 +24,13 @@ export default async function SocialsVersionsPage({
   const { brief, blog, platforms: platformParam } = await searchParams
 
   const platformIds = parsePlatformIds(platformParam)
+  // The sidebar entry is inert in this build, but a hidden link is not a guard —
+  // the route is still typed into an address bar, and Socials would then render
+  // against a feature the release does not ship.
+  if (!SOCIALS_ENABLED) {
+    redirect("/blogger")
+  }
+
   const user = await requireUser()
   const blogPost = blog ? await getPost(user.id, blog) : undefined
 

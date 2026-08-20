@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation"
+
 import type { Crumb } from "@/components/app-header"
 import { AppShell } from "@/components/app-shell"
 import { Composer } from "@/components/socials/composer"
@@ -8,6 +10,7 @@ import {
 import { currentTime } from "@/lib/now"
 import { connectedProviders } from "@/lib/connections"
 import { getPost } from "@/lib/post-store"
+import { SOCIALS_ENABLED } from "@/lib/release"
 import { requireUser } from "@/lib/session"
 import { groupByDay } from "@/lib/social-calendar"
 import { nameOf, parsePlatformIds, type PostSource } from "@/lib/social-flow"
@@ -26,6 +29,13 @@ export default async function SocialsEditorPage({
     platforms?: string
   }>
 }) {
+  // The sidebar entry is inert in this build, but a hidden link is not a guard —
+  // the route is still typed into an address bar, and Socials would then render
+  // against a feature the release does not ship.
+  if (!SOCIALS_ENABLED) {
+    redirect("/blogger")
+  }
+
   const user = await requireUser()
   const connectedIds = await connectedProviders(user.id)
   const params = await searchParams

@@ -29,6 +29,7 @@ import {
   type GenerationPhase,
 } from "@/lib/generation-steps"
 import { markdownToPlainText } from "@/lib/markdown"
+import { BLOG_PUBLISHING_ENABLED } from "@/lib/release"
 import { BODY_VIEWS, type BodyView } from "@/lib/preferences"
 import { cn } from "@/lib/utils"
 
@@ -491,7 +492,12 @@ export function EditorWorkspace({
           </Button>
           {/* Publishing hands the post to the connected blog. The dialog is
               where the title, slug, author, tags and featured image are
-              confirmed before it goes. */}
+              confirmed before it goes.
+
+              The first public release stops at Copy — there is no CMS behind
+              it yet — so the button is absent rather than disabled: a dead
+              primary action is worse than one fewer. */}
+          {BLOG_PUBLISHING_ENABLED ? (
           <PublishDialog
             postId={postId}
             title={title}
@@ -501,6 +507,7 @@ export function EditorWorkspace({
             connected={hubspotConnected}
             disabled={running || !hasDraft}
           />
+          ) : null}
         </div>
       </div>
 

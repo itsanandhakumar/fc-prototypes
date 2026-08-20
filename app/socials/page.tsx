@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation"
+
 import { AppShell } from "@/components/app-shell"
 import { NewPostButton } from "@/components/socials/new-post-button"
 import { SocialPostList } from "@/components/socials/social-post-list"
@@ -8,9 +10,17 @@ import { getPosts } from "@/lib/post-store"
 import { summarize } from "@/lib/social-insights"
 import { currentTime } from "@/lib/now"
 import { getSocialPosts } from "@/lib/social-store"
+import { SOCIALS_ENABLED } from "@/lib/release"
 import { requireUser } from "@/lib/session"
 
 export default async function SocialsPage() {
+  // The sidebar entry is inert in this build, but a hidden link is not a guard —
+  // the route is still typed into an address bar, and Socials would then render
+  // against a feature the release does not ship.
+  if (!SOCIALS_ENABLED) {
+    redirect("/blogger")
+  }
+
   const user = await requireUser()
 
   // Same greeting as Blogger's home — the two products name themselves the

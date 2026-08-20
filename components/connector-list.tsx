@@ -312,8 +312,9 @@ export function ConnectorList({
           </div>
 
           {/* Not connectable yet, and saying so is more honest than a button
-              that opens a dialog which cannot finish. LinkedIn needs app review
-              for `w_member_social`; X needs a paid API tier. */}
+              that opens a dialog which cannot finish. What is missing is
+              credentials, not permission: neither platform reviews an app that
+              posts on behalf of a signed-in user. See ai/guide/api-approvals.md. */}
           <ul className="flex flex-col divide-y divide-border rounded-md border border-border opacity-60">
             {socialPlatforms.map((platform) => (
               <li
@@ -331,10 +332,8 @@ export function ConnectorList({
             ))}
           </ul>
           <p className="text-xs/relaxed text-muted-foreground">
-            Posting needs a LinkedIn app approved for{" "}
-            <code className="rounded bg-muted px-1 py-0.5">w_member_social</code>{" "}
-            and a paid X API tier. Until then Social Studio drafts and schedules,
-            but does not send.
+            Posting needs a registered app on each platform. Until then Social
+            Studio drafts and schedules, but does not send.
           </p>
         </section>
       ) : null}
