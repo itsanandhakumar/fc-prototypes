@@ -2,12 +2,12 @@ import { cookies } from "next/headers"
 
 import { AppShell } from "@/components/app-shell"
 import { EditorWorkspace } from "@/components/editor/editor-workspace"
-import { CONNECTORS_COOKIE, isConnected } from "@/lib/connectors"
 import {
   parseKeywords,
   parseTargetCharacters,
   type DraftBrief,
 } from "@/lib/draft-generator"
+import { connectedProviders } from "@/lib/connections"
 import { getPost } from "@/lib/post-store"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
 import { requireUser } from "@/lib/session"
@@ -59,8 +59,7 @@ export default async function EditorPage({
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
   )
-  const hubspotConnected = isConnected(
-    cookieStore.get(CONNECTORS_COOKIE)?.value,
+  const hubspotConnected = (await connectedProviders(user.id)).includes(
     "hubspot"
   )
 

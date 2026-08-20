@@ -69,7 +69,42 @@ export function PublishDialog({
   disabled?: boolean
 }) {
   const [open, setOpen] = React.useState(false)
-  const [publishing, startPublishing] = React.useTransition()
+  const [publishing, setPublishing] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  // On success the action redirects, so nothing after the await runs. A
+  // returned value therefore always means the publish failed, and HubSpot's
+  // own message is what the writer needs to see — "missing the content scope"
+  // is actionable in a way "publish failed" is not.
+  async function publish() {
+    setPublishing(true)
+    setError(null)
+    try {
+      const result = await publishToHubSpot({
+        postId,
+        title,
+        body,
+        brief,
+        insights,
+      })
+      if (result?.error) {
+        setError(result.error)
+      }
+    } catch (caught) {
+      // A redirect throws by design; anything else is worth reporting.
+      if (
+        caught instanceof Error &&
+        caught.message.includes("NEXT_REDIRECT")
+      ) {
+        throw caught
+      }
+      setError(
+        caught instanceof Error ? caught.message : "Publishing failed."
+      )
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   // Roughly what the reader is in for. The store counts nothing, so this is
   // the only place either figure is worked out.
@@ -124,8 +159,17 @@ export function PublishDialog({
               </div>
 
               <p className="text-xs text-muted-foreground">
-                A mock-up. Nothing is sent.
+                This publishes to your live {HUBSPOT.name} blog.
               </p>
+
+              {error ? (
+                <p
+                  role="alert"
+                  className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs/relaxed text-destructive"
+                >
+                  {error}
+                </p>
+              ) : null}
 
               <div className="flex items-center justify-end gap-3">
                 <Button
@@ -141,11 +185,7 @@ export function PublishDialog({
                   size="lg"
                   className={HUBSPOT.button}
                   disabled={publishing}
-                  onClick={() =>
-                    startPublishing(async () =>
-                      publishToHubSpot({ postId, title, body, brief, insights })
-                    )
-                  }
+                  onClick={publish}
                 >
                   <Send />
                   {publishing ? "Publishing…" : `Publish to ${HUBSPOT.name}`}

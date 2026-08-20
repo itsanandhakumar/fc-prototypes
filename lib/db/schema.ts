@@ -126,6 +126,11 @@ export const posts = mysqlTable(
       .default("draft"),
     brief: json("brief").$type<StoredBrief>(),
     insights: json("insights").$type<StoredInsights>(),
+    /** HubSpot's own id once the post has been published there, so a second
+        publish updates the same post instead of creating a duplicate. */
+    hubspotPostId: varchar("hubspotPostId", { length: 64 }),
+    /** Where it actually lives, as HubSpot reported it. */
+    hubspotUrl: varchar("hubspotUrl", { length: 1024 }),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
   },
@@ -136,6 +141,134 @@ export const posts = mysqlTable(
   ]
 )
 
+// ---------------------------------------------------------------------------
+// Connections
+//
+// One row per destination an account has linked. The token lives here rather
+// than in a cookie: a cookie is readable by anything running in the browser and
+// is capped at 4KB, and a HubSpot token is a credential that can publish to a
+// customer's live blog.
+// ---------------------------------------------------------------------------
+
+export type ConnectionProvider = "hubspot" | "linkedin" | "x"
+
+/** Everything a provider needs beyond the token. Shape varies per provider,
+    which is why it is JSON rather than columns. */
+export type ConnectionMeta = {
+  /** HubSpot: the blog to publish into (`contentGroupId`). */
+  blogId?: string
+  /** HubSpot: who the post is filed under. */
+  authorId?: string
+  authorName?: string
+  /** HubSpot: e.g. "en-us". Asked once at connect time. */
+  language?: string
+  /** Where published posts appear, for building a preview URL. */
+  domain?: string
+}
+
+export const connections = mysqlTable(
+  "connection",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: varchar("userId", { length: 255 }).notNull(),
+    provider: varchar("provider", { length: 32 })
+      .$type<ConnectionProvider>()
+      .notNull(),
+    /** The private-app token or OAuth access token. Never sent to the client:
+        every read happens in a server action or route handler. */
+    accessToken: text("accessToken").notNull(),
+    /** OAuth providers only. Null for a HubSpot private app, whose token does
+        not expire. */
+    refreshToken: text("refreshToken"),
+    expiresAt: timestamp("expiresAt"),
+    /** What to show in Settings — "Forward Marketing · Portal 24601". */
+    accountLabel: varchar("accountLabel", { length: 255 }),
+    meta: json("meta").$type<ConnectionMeta>(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (connection) => [
+    // One connection per provider per account — reconnecting replaces rather
+    // than accumulating.
+    index("connection_user_provider_idx").on(
+      connection.userId,
+      connection.provider
+    ),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// Social posts
+//
+// A post is one idea; a variant is the copy that actually goes to one network.
+// They are separate tables because each variant succeeds or fails on its own —
+// LinkedIn can accept a post in the same breath X rejects it.
+// ---------------------------------------------------------------------------
+
+export type SocialPostStatus = "Draft" | "Scheduled" | "Published" | "Failed"
+
+export type VariantMetrics = {
+  impressions: number
+  likes: number
+  comments: number
+  reposts: number
+}
+
+export const socialPosts = mysqlTable(
+  "social_post",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: varchar("userId", { length: 255 }).notNull(),
+    /** An internal label. Never posted — X has no title field. */
+    name: varchar("name", { length: 512 }).notNull(),
+    status: varchar("status", { length: 32 })
+      .$type<SocialPostStatus>()
+      .notNull()
+      .default("Draft"),
+    /** A real instant, not an offset. The prototype stored minutes-from-now,
+        which cannot survive a restart and cannot be queried by a worker. */
+    scheduledAt: timestamp("scheduledAt"),
+    /** The blog post this was written from, when it came from one. */
+    sourcePostId: varchar("sourcePostId", { length: 255 }),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (post) => [
+    index("social_user_updated_idx").on(post.userId, post.updatedAt),
+    // The scheduler's query is "anything due, across all accounts", so its
+    // index leads with the time rather than the owner.
+    index("social_due_idx").on(post.status, post.scheduledAt),
+  ]
+)
+
+export const socialVariants = mysqlTable(
+  "social_variant",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    socialPostId: varchar("socialPostId", { length: 255 }).notNull(),
+    platformId: varchar("platformId", { length: 32 }).notNull(),
+    text: text("text").notNull(),
+    /** Set once the network has accepted it. */
+    permalink: varchar("permalink", { length: 1024 }),
+    remoteId: varchar("remoteId", { length: 255 }),
+    /** Why this platform rejected it. One variant can fail while its siblings
+        go out fine, which is why this sits here rather than on the post. */
+    failure: text("failure"),
+    metrics: json("metrics").$type<VariantMetrics>(),
+    metricsCheckedAt: timestamp("metricsCheckedAt"),
+  },
+  (variant) => [index("variant_post_idx").on(variant.socialPostId)]
+)
+
 export type UserRow = typeof users.$inferSelect
 export type PostRow = typeof posts.$inferSelect
 export type NewPostRow = typeof posts.$inferInsert
+export type ConnectionRow = typeof connections.$inferSelect
+export type SocialPostRow = typeof socialPosts.$inferSelect
+export type SocialVariantRow = typeof socialVariants.$inferSelect

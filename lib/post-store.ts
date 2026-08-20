@@ -32,6 +32,8 @@ function toBlogPost(row: PostRow): BlogPost {
     body: row.body,
     brief: row.brief ?? undefined,
     insights: row.insights ?? undefined,
+    hubspotPostId: row.hubspotPostId ?? undefined,
+    hubspotUrl: row.hubspotUrl ?? undefined,
   }
 }
 
@@ -145,4 +147,24 @@ export async function savePost({
     throw new Error("Insert succeeded but the post could not be read back.")
   }
   return created
+}
+
+/** Records where a post ended up on HubSpot, and marks it Published.
+    Separate from `savePost` because it runs after the API call succeeded — the
+    post is saved first, so a HubSpot failure never costs the writer the draft. */
+export async function setHubSpotPublication({
+  userId,
+  id,
+  hubspotPostId,
+  hubspotUrl,
+}: {
+  userId: string
+  id: string
+  hubspotPostId: string
+  hubspotUrl: string | null
+}): Promise<void> {
+  await db
+    .update(posts)
+    .set({ status: "published", hubspotPostId, hubspotUrl })
+    .where(and(eq(posts.id, id), eq(posts.userId, userId)))
 }

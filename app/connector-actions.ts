@@ -1,95 +1,166 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-import {
-  CONNECTORS_COOKIE,
-  findBlogDestination,
-  findPlatform,
-  HUBSPOT,
-  parseConnectedIds,
-} from "@/lib/connectors"
-import type { StoredInsights } from "@/lib/db/schema"
+import { removeConnection, connectionFor, saveConnection } from "@/lib/connections"
+import type { ConnectionProvider, StoredInsights } from "@/lib/db/schema"
 import type { DraftBrief } from "@/lib/draft-generator"
-import { savePost } from "@/lib/post-store"
+import {
+  describeToken,
+  HubSpotError,
+  listAuthors,
+  listBlogs,
+  publishBlogPost,
+} from "@/lib/hubspot/client"
+import { markdownToHtml } from "@/lib/markdown"
+import { getPost, savePost, setHubSpotPublication } from "@/lib/post-store"
 import { requireUser } from "@/lib/session"
+import { slugify } from "@/lib/slug"
 
-async function writeConnected(ids: string[]) {
-  const cookieStore = await cookies()
+export type ConnectState = { error: string | null }
 
-  cookieStore.set(CONNECTORS_COOKIE, ids.join(","), {
-    path: "/",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 365,
-  })
-}
+// ---------------------------------------------------------------------------
+// Connecting
+// ---------------------------------------------------------------------------
 
-async function readConnected() {
-  const cookieStore = await cookies()
-  return parseConnectedIds(cookieStore.get(CONNECTORS_COOKIE)?.value)
-}
+/** Step one: the token is checked against HubSpot before anything is stored, so
+    a typo fails here rather than at publish time. Returns what the account has
+    to choose between. */
+export async function inspectHubSpotToken(token: string): Promise<{
+  error: string | null
+  label?: string
+  blogs?: Array<{ id: string; name: string; url?: string; language?: string }>
+  authors?: Array<{ id: string; name: string }>
+}> {
+  await requireUser()
 
-// Connecting is mocked: there is no OAuth handshake to run yet. Takes either
-// kind of id — the account's connections are one list to the person holding it.
-export async function connectPlatform(platformId: string) {
-  if (!findPlatform(platformId) && !findBlogDestination(platformId)) {
-    return
+  const trimmed = token.trim()
+  if (!trimmed) {
+    return { error: "Paste the private-app token first." }
   }
 
-  const connected = await readConnected()
-  await writeConnected([...new Set([...connected, platformId])])
+  try {
+    const [described, blogs, authors] = await Promise.all([
+      describeToken(trimmed),
+      listBlogs(trimmed),
+      listAuthors(trimmed),
+    ])
+
+    if (!blogs.length) {
+      return {
+        error:
+          "That token works, but the portal has no blog. Create one in HubSpot under Content → Blog, then try again.",
+      }
+    }
+
+    return {
+      error: null,
+      label: described.label,
+      blogs: blogs.map((blog) => ({
+        id: blog.id,
+        name: blog.name,
+        url: blog.absoluteUrl,
+        language: blog.language,
+      })),
+      authors: authors.map((author) => ({
+        id: author.id,
+        name: author.fullName || author.name || author.email || "Unnamed",
+      })),
+    }
+  } catch (error) {
+    if (error instanceof HubSpotError) {
+      return { error: `${error.message}${error.detail ? ` (${error.detail})` : ""}` }
+    }
+    throw error
+  }
+}
+
+/** Step two: store it. The token was already proven in step one. */
+export async function connectHubSpot(input: {
+  token: string
+  blogId: string
+  blogName: string
+  domain?: string
+  authorId?: string
+  authorName?: string
+  language: string
+  label: string
+}): Promise<ConnectState> {
+  const user = await requireUser()
+
+  if (!input.token.trim() || !input.blogId) {
+    return { error: "Pick a blog before connecting." }
+  }
+
+  await saveConnection({
+    userId: user.id,
+    provider: "hubspot",
+    accessToken: input.token.trim(),
+    accountLabel: `${input.blogName} · ${input.label}`,
+    meta: {
+      blogId: input.blogId,
+      authorId: input.authorId,
+      authorName: input.authorName,
+      language: input.language,
+      domain: input.domain,
+    },
+  })
 
   revalidatePath("/blogger")
   revalidatePath("/editor")
-  // Social Studio asks the same question of the same cookie: the workspace will
-  // not post to a network the account is not signed in to, so connecting from
-  // the publish dialog has to reach the page holding that answer.
-  revalidatePath("/socials/editor")
+  return { error: null }
 }
 
-export async function disconnectPlatform(platformId: string) {
-  const connected = await readConnected()
-  await writeConnected(connected.filter((id) => id !== platformId))
-
+export async function disconnectProvider(provider: ConnectionProvider) {
+  const user = await requireUser()
+  await removeConnection(user.id, provider)
   revalidatePath("/blogger")
+  revalidatePath("/socials")
   revalidatePath("/editor")
-  // Social Studio asks the same question of the same cookie: the workspace will
-  // not post to a network the account is not signed in to, so connecting from
-  // the publish dialog has to reach the page holding that answer.
-  revalidatePath("/socials/editor")
 }
 
-// Publishing pushes the post to the connected HubSpot blog. Mocked like the
-// connection itself: nothing leaves the prototype.
+// ---------------------------------------------------------------------------
+// Publishing
+// ---------------------------------------------------------------------------
+
+export type PublishResult = { error: string | null; url?: string }
+
 export async function publishToHubSpot(input: {
   postId?: string
   title: string
   body: string
-  /** Kept with the post, so a draft published without ever being saved still
-      carries the brief it was written from. */
   brief?: DraftBrief
-  /** The panel's cached analysis, kept alongside it for the same reason. */
   insights?: StoredInsights
-}) {
+  /** Overrides from the dialog, where the writer can change what was filled in. */
+  slug?: string
+  metaDescription?: string
+  authorId?: string
+}): Promise<PublishResult> {
   const user = await requireUser()
-  const connected = await readConnected()
 
-  if (!connected.includes(HUBSPOT.id)) {
-    return
+  const connection = await connectionFor(user.id, "hubspot")
+  if (!connection) {
+    return { error: "Connect HubSpot in Settings before publishing." }
   }
 
-  // Nothing is sent to HubSpot yet — there is no portal token and no API call.
-  // What this does do is real: the post is committed to the database as
-  // Published, owned by this user, so the state the app reports afterwards is
-  // the state it is actually in.
-  const published = await savePost({
+  const blogId = connection.meta?.blogId
+  if (!blogId) {
+    return {
+      error: "The HubSpot connection has no blog set. Reconnect and pick one.",
+    }
+  }
+
+  const title = input.title.trim() || "Untitled post"
+
+  // Save first. If HubSpot then fails, the writer still has the post — losing
+  // the draft because a third party was down would be the worse outcome.
+  const saved = await savePost({
     userId: user.id,
     id: input.postId || undefined,
-    title: input.title,
+    title,
     body: input.body,
-    status: "Published",
+    status: "Draft",
     brief: input.brief
       ? {
           brief: input.brief.brief,
@@ -100,6 +171,43 @@ export async function publishToHubSpot(input: {
     insights: input.insights,
   })
 
+  const existing = await getPost(user.id, saved.id)
+
+  try {
+    const post = await publishBlogPost(connection.accessToken, {
+      hubspotPostId: existing?.hubspotPostId ?? null,
+      blogId,
+      name: title,
+      slug: (input.slug || slugify(title)).replace(/^\/+/, ""),
+      // HubSpot stores rendered HTML, not Markdown.
+      postBody: markdownToHtml(input.body),
+      metaDescription:
+        input.metaDescription ?? input.insights?.metaDescription ?? undefined,
+      authorId: input.authorId ?? connection.meta?.authorId,
+    })
+
+    const url =
+      post.absoluteUrl ??
+      post.url ??
+      (connection.meta?.domain
+        ? `${connection.meta.domain.replace(/\/+$/, "")}/${post.slug ?? slugify(title)}`
+        : undefined)
+
+    await setHubSpotPublication({
+      userId: user.id,
+      id: saved.id,
+      hubspotPostId: post.id,
+      hubspotUrl: url ?? null,
+    })
+  } catch (error) {
+    if (error instanceof HubSpotError) {
+      return {
+        error: `${error.message}${error.detail ? ` — ${error.detail}` : ""}`,
+      }
+    }
+    throw error
+  }
+
   revalidatePath("/blogger")
-  redirect(`/blogger?posted=${encodeURIComponent(published.id)}`)
+  redirect(`/blogger?posted=${encodeURIComponent(saved.id)}`)
 }

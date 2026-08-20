@@ -1,83 +1,195 @@
+import "server-only"
+
+import { and, desc, eq, inArray } from "drizzle-orm"
+
+import { db } from "@/lib/db"
 import {
-  socialPosts,
-  type SocialPost,
-  type SocialVariant,
-} from "@/lib/social-data"
+  socialPosts as socialPostsTable,
+  socialVariants as socialVariantsTable,
+  type SocialPostRow,
+  type SocialVariantRow,
+} from "@/lib/db/schema"
+import type { SocialPost, SocialVariant } from "@/lib/social-data"
 
-// Prototype storage: in memory, seeded from the mock posts. Mirrors
-// lib/post-store.ts, and resets the same way when the dev server restarts.
+// Social posts in TiDB, scoped by `userId` the same way blog posts are.
+//
+// The prototype kept minutes-from-now offsets so it never needed a clock. That
+// cannot survive a restart and cannot be queried — a scheduler asking "what is
+// due?" needs a real instant — so the column is a timestamp and the offset is
+// computed on the way out, which is also what keeps the server and client from
+// rendering different relative times.
 
-let posts: SocialPost[] = [...socialPosts]
+const MS_PER_MINUTE = 60_000
 
-export function getSocialPosts(): SocialPost[] {
-  return posts
+function minutesSince(at: Date, now: number): number {
+  return Math.max(0, Math.round((now - at.getTime()) / MS_PER_MINUTE))
 }
 
-export function getSocialPost(id: string | undefined): SocialPost | undefined {
+function minutesUntil(at: Date, now: number): number {
+  return Math.max(0, Math.round((at.getTime() - now) / MS_PER_MINUTE))
+}
+
+function toSocialPost(
+  row: SocialPostRow,
+  variants: SocialVariantRow[],
+  now: number
+): SocialPost {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    updatedMinutesAgo: minutesSince(row.updatedAt, now),
+    scheduledInMinutes: row.scheduledAt
+      ? minutesUntil(row.scheduledAt, now)
+      : undefined,
+    variants: variants.map(
+      (variant): SocialVariant => ({
+        platformId: variant.platformId,
+        text: variant.text,
+        metrics: variant.metrics ?? undefined,
+        failure: variant.failure ?? undefined,
+      })
+    ),
+  }
+}
+
+async function variantsFor(postIds: string[]): Promise<Map<string, SocialVariantRow[]>> {
+  const grouped = new Map<string, SocialVariantRow[]>()
+  if (!postIds.length) {
+    return grouped
+  }
+
+  const rows = await db
+    .select()
+    .from(socialVariantsTable)
+    .where(inArray(socialVariantsTable.socialPostId, postIds))
+
+  for (const row of rows) {
+    const list = grouped.get(row.socialPostId) ?? []
+    list.push(row)
+    grouped.set(row.socialPostId, list)
+  }
+  return grouped
+}
+
+export async function getSocialPosts(userId: string): Promise<SocialPost[]> {
+  const rows = await db
+    .select()
+    .from(socialPostsTable)
+    .where(eq(socialPostsTable.userId, userId))
+    .orderBy(desc(socialPostsTable.updatedAt))
+
+  // One query for every variant rather than one per post: a workspace with
+  // eighty posts would otherwise make eighty round trips to TiDB.
+  const grouped = await variantsFor(rows.map((row) => row.id))
+  const now = Date.now()
+
+  return rows.map((row) => toSocialPost(row, grouped.get(row.id) ?? [], now))
+}
+
+export async function getSocialPost(
+  userId: string,
+  id: string | undefined
+): Promise<SocialPost | undefined> {
   if (!id) {
     return undefined
   }
-  return posts.find((post) => post.id === id)
-}
 
-function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60)
+  const [row] = await db
+    .select()
+    .from(socialPostsTable)
+    .where(and(eq(socialPostsTable.id, id), eq(socialPostsTable.userId, userId)))
+    .limit(1)
 
-  return slug || "untitled-post"
-}
-
-function uniqueId(name: string): string {
-  const base = slugify(name)
-  let id = base
-  let suffix = 2
-  while (posts.some((post) => post.id === id)) {
-    id = `${base}-${suffix}`
-    suffix += 1
+  if (!row) {
+    return undefined
   }
-  return id
+
+  const grouped = await variantsFor([row.id])
+  return toSocialPost(row, grouped.get(row.id) ?? [], Date.now())
 }
 
-/** What every write to the store has in common: the post, its copy, and where
-    it goes. What differs is the state it lands in, which is the argument. */
-type Write = {
+/** What every write has in common: the post, its copy, and where it goes. What
+    differs is the state it lands in, which is the argument. */
+export type Write = {
+  userId: string
   id?: string
   name: string
   variants: Array<Pick<SocialVariant, "platformId" | "text">>
+  /** The blog post it was written from, when it came from one. */
+  sourcePostId?: string
 }
 
-/** Upserts and moves the post to the head of the list, the way
-    lib/post-store.ts does. */
-function upsert(
-  { id, name, variants }: Write,
-  state: Pick<SocialPost, "status" | "scheduledInMinutes"> & {
+async function upsert(
+  write: Write,
+  state: {
+    status: SocialPost["status"]
+    scheduledAt?: Date | null
     /** Why a platform turned it down, by platform id. */
     failures?: Record<string, string>
+    /** Where it landed, by platform id. */
+    permalinks?: Record<string, string>
   }
-): SocialPost {
-  const existing = getSocialPost(id)
+): Promise<SocialPost> {
+  const existing = write.id
+    ? await getSocialPost(write.userId, write.id)
+    : undefined
 
-  const saved: SocialPost = {
-    id: existing?.id ?? uniqueId(name),
-    name,
-    status: state.status,
-    updatedMinutesAgo: 0,
-    scheduledInMinutes: state.scheduledInMinutes,
-    variants: variants.map((variant) => ({
-      ...variant,
-      // Figures belong to a post that has been seen, and none of these have
-      // been: a post published a moment ago has no engagement yet, and one
-      // rewritten since it was published is not the post those numbers were
-      // measuring. Both come back empty and earn their numbers again.
-      failure: state.failures?.[variant.platformId],
-    })),
+  const id = existing?.id ?? crypto.randomUUID()
+
+  if (existing) {
+    await db
+      .update(socialPostsTable)
+      .set({
+        name: write.name,
+        status: state.status,
+        scheduledAt: state.scheduledAt ?? null,
+      })
+      .where(
+        and(
+          eq(socialPostsTable.id, id),
+          eq(socialPostsTable.userId, write.userId)
+        )
+      )
+
+    // The variants are rewritten wholesale. Diffing them would be more code for
+    // no benefit: the composer always sends the full set, and a variant's
+    // identity is its platform rather than a row id.
+    await db
+      .delete(socialVariantsTable)
+      .where(eq(socialVariantsTable.socialPostId, id))
+  } else {
+    await db.insert(socialPostsTable).values({
+      id,
+      userId: write.userId,
+      name: write.name,
+      status: state.status,
+      scheduledAt: state.scheduledAt ?? null,
+      sourcePostId: write.sourcePostId ?? null,
+    })
   }
 
-  posts = [saved, ...posts.filter((post) => post.id !== saved.id)]
+  if (write.variants.length) {
+    await db.insert(socialVariantsTable).values(
+      write.variants.map((variant) => ({
+        socialPostId: id,
+        platformId: variant.platformId,
+        text: variant.text,
+        failure: state.failures?.[variant.platformId] ?? null,
+        permalink: state.permalinks?.[variant.platformId] ?? null,
+        // Figures belong to a post that has been seen, and none of these have:
+        // a post published a moment ago has no engagement yet, and one
+        // rewritten since it was published is not the post those numbers were
+        // measuring. Both start empty and earn their numbers again.
+        metrics: null,
+      }))
+    )
+  }
 
+  const saved = await getSocialPost(write.userId, id)
+  if (!saved) {
+    throw new Error(`Social post ${id} vanished during save.`)
+  }
   return saved
 }
 
@@ -86,23 +198,17 @@ function upsert(
  *
  * That includes a post that was scheduled: taking it back to a draft takes it
  * out of the queue, which is the only sense "save" can have for something with
- * a departure time on it. It is also the way to call one off, and the composer
- * says so where the button is.
+ * a departure time on it.
  */
-export function saveDraft(write: Write): SocialPost {
-  return upsert(write, { status: "Draft" })
+export async function saveDraft(write: Write): Promise<SocialPost> {
+  return upsert(write, { status: "Draft", scheduledAt: null })
 }
 
-/** Queued, to go out in `minutesAhead`. The store keeps the offset rather than
-    a date for the reason everything else here does — see lib/time.ts — and the
-    picker does the conversion in lib/social-schedule.ts. */
-export function schedulePost(
-  write: Write & { minutesAhead: number }
-): SocialPost {
-  return upsert(write, {
-    status: "Scheduled",
-    scheduledInMinutes: Math.max(0, Math.round(write.minutesAhead)),
-  })
+/** Queued, to go out at `at`. */
+export async function schedulePost(
+  write: Write & { at: Date }
+): Promise<SocialPost> {
+  return upsert(write, { status: "Scheduled", scheduledAt: write.at })
 }
 
 /**
@@ -110,48 +216,62 @@ export function schedulePost(
  *
  * Each network answers for itself, so the outcome is per platform rather than
  * per post: a post is Failed if any variant was turned down — the one thing
- * that needs attention is the thing the status should name — and Published
- * only when all of them went.
+ * that needs attention is the thing the status should name — and Published only
+ * when all of them went.
  */
-export function publishPost(
-  write: Write & { failures?: Record<string, string> }
-): SocialPost {
+export async function publishPost(
+  write: Write & {
+    failures?: Record<string, string>
+    permalinks?: Record<string, string>
+  }
+): Promise<SocialPost> {
   const rejected = write.variants.some(
     (variant) => write.failures?.[variant.platformId]
   )
 
   return upsert(write, {
     status: rejected ? "Failed" : "Published",
+    scheduledAt: null,
     failures: write.failures,
+    permalinks: write.permalinks,
   })
 }
 
-/**
- * Sends a rejected post again. Nothing is really sent, so the retry always
- * works — the point is that a failure is recoverable rather than a dead end.
- *
- * It comes back with no metrics, which is correct rather than a gap: a post
- * that went out a moment ago has not been seen by anyone yet. So it lifts the
- * published count and today's bar on the streak, and leaves impressions alone
- * until it has earned some.
- */
-export function retrySocialPost(id: string): SocialPost | undefined {
-  const existing = getSocialPost(id)
+/** Clears the failures on a rejected post and sends it again. */
+export async function retrySocialPost(
+  userId: string,
+  id: string
+): Promise<SocialPost | undefined> {
+  const existing = await getSocialPost(userId, id)
   if (!existing || existing.status !== "Failed") {
     return undefined
   }
 
-  const recovered: SocialPost = {
-    ...existing,
-    status: "Published",
-    updatedMinutesAgo: 0,
-    variants: existing.variants.map((variant) => ({
-      ...variant,
-      failure: undefined,
+  return publishPost({
+    userId,
+    id,
+    name: existing.name,
+    variants: existing.variants.map(({ platformId, text }) => ({
+      platformId,
+      text,
     })),
-  }
+  })
+}
 
-  posts = posts.map((post) => (post.id === id ? recovered : post))
+/**
+ * Everything due to go out, across every account.
+ *
+ * This is the query the schedule column exists for, and the reason it is a
+ * timestamp rather than an offset. Nothing calls it yet — sending needs
+ * LinkedIn and X credentials — but it is what a worker or a cron route will
+ * ask for.
+ */
+export async function dueSocialPosts(now = new Date()): Promise<SocialPostRow[]> {
+  const rows = await db
+    .select()
+    .from(socialPostsTable)
+    .where(eq(socialPostsTable.status, "Scheduled"))
+    .orderBy(socialPostsTable.scheduledAt)
 
-  return recovered
+  return rows.filter((row) => row.scheduledAt && row.scheduledAt <= now)
 }

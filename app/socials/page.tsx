@@ -17,7 +17,7 @@ export default async function SocialsPage() {
   // same way, so switching between them reads as one app.
   const greeting = `Hi, ${greetingNameOf(displayNameOf(user.name, user.email))}`
 
-  const posts = getSocialPosts()
+  const posts = await getSocialPosts(user.id)
   const summary = summarize(posts)
 
   // One `now`, read once per request and handed down. Everything else in the

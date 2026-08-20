@@ -59,14 +59,22 @@ rich-text editor. Every post query is scoped by `userId`, which is also the
 whole authorisation model: a guessed post id returns nothing rather than someone
 else's draft.
 
-**Not real yet** — everything Social Studio sends, and the HubSpot hand-off.
-Publishing marks the post Published in your own database but calls no API. The
-social store is still an in-memory array (`lib/social-store.ts`) that resets when
-the dev server restarts, and its metrics are seeded.
+**Real** — HubSpot publishing. Connect a portal in Settings and **Publish to
+HubSpot** creates the post on your live blog through the CMS v3 API, then stores
+its id so a second publish updates rather than duplicates. Setup:
+`ai/guide/hubspot-setup.md`.
 
-Making Social Studio real is mostly blocked outside the code: X posting needs a
-paid API tier, LinkedIn needs app review for `w_member_social`, and scheduling
-needs a worker process — which rules out serverless.
+**Real** — social drafts, schedules and their state. Posts and their per-platform
+variants live in TiDB, and a schedule is a real timestamp a worker can query
+(`dueSocialPosts()`).
+
+**Not real yet** — sending to LinkedIn and X, and the copy Social Studio writes.
+Publishing a social post records it without calling any network, and
+`lib/social-generator.ts` is still deterministic templates rather than a model.
+
+Sending is blocked outside the code: LinkedIn needs an app approved for
+`w_member_social`, X needs a paid API tier. Settings shows both as "Awaiting API
+access" rather than offering a button that cannot finish.
 
 ### Generation
 
@@ -104,15 +112,20 @@ headings, bold, italic, links, inline code, quotes, and both list kinds.
 
 ## Data
 
-TiDB Cloud (MySQL-compatible) via Drizzle. Five tables: four the Auth.js adapter
-owns, plus `post`. No foreign keys — every read is scoped by `userId` in the
-query layer instead.
+TiDB Cloud (MySQL-compatible) via Drizzle. No foreign keys — every read is
+scoped by `userId` in the query layer instead, which is also the whole
+authorisation model.
 
 ```bash
 npm run db:generate   # write a migration to drizzle/
 npm run db:migrate    # apply migrations
 npm run db:studio     # browse the data
 ```
+
+Tables: the four Auth.js owns, plus `post`, `connection`, `social_post` and
+`social_variant`. Credentials live in `connection` rather than a cookie — a
+HubSpot token can publish to a customer's live blog, so it never reaches the
+browser.
 
 > ⚠️ `npm run db:push` fails with `Multiple primary key defined` on this schema.
 > That is a drizzle-kit introspection bug with composite primary keys, not a

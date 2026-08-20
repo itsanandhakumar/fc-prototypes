@@ -12,12 +12,15 @@ import type { BodyView } from "@/lib/preferences"
 export function SettingsButton({
   defaultBodyView,
   connectedIds,
+  hubspotLabel,
   name,
   email,
   image,
 }: {
   defaultBodyView: BodyView
   connectedIds: string[]
+  /** Which portal and blog, once connected. */
+  hubspotLabel?: string | null
   name: string
   email: string
   image: string | null
@@ -40,6 +43,7 @@ export function SettingsButton({
         onOpenChange={setOpen}
         defaultBodyView={defaultBodyView}
         connectedIds={connectedIds}
+        hubspotLabel={hubspotLabel}
         name={name}
         email={email}
         image={image}

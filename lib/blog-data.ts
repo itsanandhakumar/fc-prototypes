@@ -20,6 +20,9 @@ export type BlogPost = {
   body: string
   brief?: StoredBrief
   insights?: StoredInsights
+  /** Set once the post has been published to HubSpot. */
+  hubspotPostId?: string
+  hubspotUrl?: string
 }
 
 const MINUTES_PER_HOUR = 60

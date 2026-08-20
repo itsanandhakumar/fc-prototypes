@@ -148,6 +148,7 @@ export function SettingsDialog({
   onOpenChange,
   defaultBodyView,
   connectedIds,
+  hubspotLabel,
   name,
   email,
   image,
@@ -157,6 +158,7 @@ export function SettingsDialog({
   defaultBodyView: BodyView
   /** Blog and social destinations this account has connected. */
   connectedIds: string[]
+  hubspotLabel?: string | null
   name: string
   email: string
   image: string | null
@@ -243,7 +245,10 @@ export function SettingsDialog({
             ) : null}
 
                         {section === "connectors" ? (
-              <ConnectorList connectedIds={connectedIds} />
+              <ConnectorList
+                connectedIds={connectedIds}
+                hubspotLabel={hubspotLabel}
+              />
             ) : null}
           </div>
         </div>

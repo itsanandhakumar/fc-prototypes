@@ -1,15 +1,12 @@
-import { cookies } from "next/headers"
-
 import type { Crumb } from "@/components/app-header"
 import { AppShell } from "@/components/app-shell"
 import { Composer } from "@/components/socials/composer"
 import {
-  CONNECTORS_COOKIE,
-  parseConnectedIds,
   PLATFORMS,
   SOCIAL_PLATFORM_IDS,
 } from "@/lib/connectors"
 import { currentTime } from "@/lib/now"
+import { connectedProviders } from "@/lib/connections"
 import { getPost } from "@/lib/post-store"
 import { requireUser } from "@/lib/session"
 import { groupByDay } from "@/lib/social-calendar"
@@ -37,15 +34,10 @@ export default async function SocialsEditorPage({
     variants?: string
   }>
 }) {
+  const user = await requireUser()
+  const connectedIds = await connectedProviders(user.id)
   const params = await searchParams
-  const post = getSocialPost(params.post)
-
-  // Nothing can be sent or queued to a network the account is not signed in
-  // to, the way the blog cannot be published without HubSpot connected.
-  const cookieStore = await cookies()
-  const connectedIds = parseConnectedIds(
-    cookieStore.get(CONNECTORS_COOKIE)?.value
-  )
+  const post = await getSocialPost(user.id, params.post)
 
   // One `now`, read once per request and handed down — the same single reading
   // the calendar takes, and for the same reason: turning "Tuesday at 9" into
@@ -61,7 +53,9 @@ export default async function SocialsEditorPage({
   const queuedDays = Object.fromEntries(
     Array.from(
       groupByDay(
-        getSocialPosts().filter((entry) => entry.status === "Scheduled"),
+        (await getSocialPosts(user.id)).filter(
+          (entry) => entry.status === "Scheduled"
+        ),
         nowMs
       ),
       ([day, queued]) => [day, queued.length]
@@ -72,7 +66,6 @@ export default async function SocialsEditorPage({
     SOCIAL_PLATFORM_IDS.includes(platform.id)
   )
 
-  const user = await requireUser()
   const blogPost = params.blog ? await getPost(user.id, params.blog) : undefined
   const source: PostSource | undefined = blogPost
     ? { kind: "blog", text: blogPost.title }

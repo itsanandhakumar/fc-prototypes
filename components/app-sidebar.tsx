@@ -5,7 +5,7 @@ import { BrandLockup } from "@/components/brand-lockup"
 import { SettingsButton } from "@/components/settings-button"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { displayNameOf } from "@/lib/auth"
-import { CONNECTORS_COOKIE, parseConnectedIds } from "@/lib/connectors"
+import { connectedProviders, connectionSummaries } from "@/lib/connections"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
 import { requireUser } from "@/lib/session"
 
@@ -18,8 +18,9 @@ export async function AppSidebar() {
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
   )
-  const connectedIds = parseConnectedIds(
-    cookieStore.get(CONNECTORS_COOKIE)?.value
+  const connectedIds = await connectedProviders(user.id)
+  const hubspot = (await connectionSummaries(user.id)).find(
+    (summary) => summary.provider === "hubspot"
   )
 
   return (
@@ -46,6 +47,7 @@ export async function AppSidebar() {
         <SettingsButton
           defaultBodyView={defaultBodyView}
           connectedIds={connectedIds}
+          hubspotLabel={hubspot?.accountLabel ?? null}
           name={displayNameOf(user.name, user.email)}
           email={user.email}
           image={user.image}
