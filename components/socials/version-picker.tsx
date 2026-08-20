@@ -1,14 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { PlatformGlyph, platformTint } from "@/components/editor/platform-glyph"
 import { SocialPreview } from "@/components/editor/social-preview"
 import { Button } from "@/components/ui/button"
 import type { Platform } from "@/lib/connectors"
-import { editorHref, type SourceRef } from "@/lib/social-flow"
 import { cn } from "@/lib/utils"
 
 // A generated draft is one answer to a brief, and reading it alone gives you
@@ -234,8 +232,8 @@ export function VersionPicker({
   platforms,
   versions,
   sourceTitle,
-  sourceRef,
-  platformIds,
+  onUse,
+  saving,
 }: {
   /** The platforms this post is going to, in registry order. */
   platforms: Platform[]
@@ -243,13 +241,14 @@ export function VersionPicker({
   versions: Record<string, string[]>
   /** What the post is about, for a preview that renders a link card. */
   sourceTitle: string
-  /** Where the post came from, and where it is going — enough to write the
-      link to the workspace. Only the version numbers travel: the workspace
-      generates the same words from the same brief. */
-  sourceRef: SourceRef
-  platformIds: string[]
+  /** Called with the chosen draft per platform. The words themselves travel
+      now rather than a version number: a model does not rebuild the same post
+      from the same brief, so the deck's output has to be carried rather than
+      regenerated. */
+  onUse: (chosen: Record<string, string>) => void
+  /** Set while the selection is being saved, so the button cannot fire twice. */
+  saving?: boolean
 }) {
-  const router = useRouter()
   const [active, setActive] = React.useState<Record<string, number>>(() =>
     Object.fromEntries(platforms.map((platform) => [platform.id, 0]))
   )
@@ -262,7 +261,14 @@ export function VersionPicker({
     : 0
 
   function use() {
-    router.push(editorHref(sourceRef, platformIds, active))
+    onUse(
+      Object.fromEntries(
+        platforms.flatMap((platform) => {
+          const text = versions[platform.id]?.[active[platform.id] ?? 0]
+          return text ? [[platform.id, text]] : []
+        })
+      )
+    )
   }
 
   return (
@@ -292,8 +298,10 @@ export function VersionPicker({
       </div>
 
       <div className="flex shrink-0 items-center justify-end gap-2 border-t pt-4">
-        <Button type="button" size="lg" onClick={use}>
-          Use {platforms.length > 1 ? "these" : "this"}
+        <Button type="button" size="lg" disabled={saving} onClick={use}>
+          {saving
+            ? "Opening…"
+            : `Use ${platforms.length > 1 ? "these" : "this"}`}
         </Button>
       </div>
     </div>

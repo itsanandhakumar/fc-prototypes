@@ -1,22 +1,20 @@
 import { redirect } from "next/navigation"
 
 import { AppShell } from "@/components/app-shell"
-import { VersionPicker } from "@/components/socials/version-picker"
+import { VersionDeck } from "@/components/socials/version-deck"
 import { PLATFORMS } from "@/lib/connectors"
 import { getPost } from "@/lib/post-store"
 import { requireUser } from "@/lib/session"
-import {
-  nameOf,
-  parsePlatformIds,
-  versionsOf,
-  type PostSource,
-  type SourceRef,
-} from "@/lib/social-flow"
+import { nameOf, parsePlatformIds, type PostSource } from "@/lib/social-flow"
 
 // The deck, as a page. It was a state inside the editor before, which meant it
 // had no address: nothing to link to, nothing to come back to when the version
-// you took turns out to be the wrong one. Everything it shows is rebuilt from
-// the URL, so coming back to it lands on the same three drafts.
+// you took turns out to be the wrong one.
+//
+// What it shows is no longer rebuilt from the URL — the model does not write
+// the same post twice — so coming back here deals a fresh three rather than the
+// same three. The URL still carries what to write about, which is what makes it
+// a page you can land on.
 export default async function SocialsVersionsPage({
   searchParams,
 }: {
@@ -41,10 +39,6 @@ export default async function SocialsVersionsPage({
     redirect("/socials")
   }
 
-  const ref: SourceRef = blogPost
-    ? { kind: "blog", blogId: blogPost.id }
-    : { kind: "brief", brief: source.text }
-
   return (
     <AppShell
       // The section, and the step. The post's name sat between them and was
@@ -61,13 +55,16 @@ export default async function SocialsVersionsPage({
       ]}
     >
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
-        <VersionPicker
+        {/* The drafts are written when the page mounts rather than here: a
+            model call takes half a minute, and blocking the server render on it
+            would show a blank page for all of it. */}
+        <VersionDeck
           platforms={PLATFORMS.filter((platform) =>
             platformIds.includes(platform.id)
           )}
-          versions={versionsOf(source, platformIds)}
           sourceTitle={nameOf(source)}
-          sourceRef={ref}
+          brief={blogPost ? undefined : source.text}
+          blogId={blogPost?.id}
           platformIds={platformIds}
         />
       </main>

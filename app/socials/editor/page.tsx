@@ -10,14 +10,7 @@ import { connectedProviders } from "@/lib/connections"
 import { getPost } from "@/lib/post-store"
 import { requireUser } from "@/lib/session"
 import { groupByDay } from "@/lib/social-calendar"
-import {
-  draftsOf,
-  nameOf,
-  parseChosen,
-  parsePlatformIds,
-  versionsHref,
-  type PostSource,
-} from "@/lib/social-flow"
+import { nameOf, parsePlatformIds, type PostSource } from "@/lib/social-flow"
 import { getSocialPost, getSocialPosts } from "@/lib/social-store"
 
 // The workspace. It arrives at its drafts three ways: a saved post brings its
@@ -31,7 +24,6 @@ export default async function SocialsEditorPage({
     brief?: string
     blog?: string
     platforms?: string
-    variants?: string
   }>
 }) {
   const user = await requireUser()
@@ -78,30 +70,16 @@ export default async function SocialsEditorPage({
     ? post.variants.map((variant) => variant.platformId)
     : parsePlatformIds(params.platforms)
 
-  // The chosen version is a number in the URL, not the words themselves: the
-  // generator is deterministic, so the same brief and the same number come back
-  // with the same draft the deck was showing.
+  // The words themselves, from the post the deck saved. They are no longer
+  // rebuilt from a version number in the URL: the model does not write the same
+  // post twice, so what the deck dealt has to be carried rather than recreated.
   const drafts = post
     ? Object.fromEntries(
         post.variants.map((variant) => [variant.platformId, variant.text])
       )
-    : source
-      ? draftsOf(source, selectedIds, parseChosen(params.variants))
-      : {}
+    : {}
 
   const name = post?.name ?? (source ? nameOf(source) : undefined)
-
-  // Only a post that came through the deck has one to go back to. A saved post
-  // never had one, and a blank post skipped it.
-  const deckHref =
-    !post && source
-      ? versionsHref(
-          blogPost
-            ? { kind: "blog", blogId: blogPost.id }
-            : { kind: "brief", brief: source.text },
-          selectedIds
-        )
-      : undefined
 
   // The section, then the steps taken to get here — the deck's trail with one
   // more on the end, so the two pages read as one route rather than as two
@@ -116,10 +94,6 @@ export default async function SocialsEditorPage({
   // The last crumb is always the page you are on: a trail whose only entry is a
   // link points away from where you are and never says where that is.
   const trail: Crumb[] = [{ label: "Socials", href: "/socials" }]
-  // A saved post never came through the deck, and a blank one skipped it.
-  if (deckHref) {
-    trail.push({ label: "Pick a version", href: deckHref })
-  }
   // "The post" once there is one to speak of; "a post" when the page opened
   // with nothing in it.
   trail.push({ label: name ? "Write the post" : "Write a post" })

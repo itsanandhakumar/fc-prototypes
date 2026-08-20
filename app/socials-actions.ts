@@ -116,3 +116,32 @@ export async function publishSocialPost({
   revalidatePath("/socials")
   return saved.id
 }
+
+/**
+ * Saves the drafts chosen in the deck and returns the new post's id.
+ *
+ * The deck used to hand the editor a set of version numbers and let it
+ * regenerate the same words. A model does not reproduce a post from a brief, so
+ * the words themselves are persisted here and the editor opens a real post.
+ */
+export async function saveDeckSelection({
+  name,
+  blogId,
+  variants,
+}: {
+  name: string
+  blogId?: string
+  variants: Array<Pick<SocialVariant, "platformId" | "text">>
+}): Promise<string> {
+  const user = await requireUser()
+
+  const saved = await saveDraft({
+    userId: user.id,
+    name,
+    variants,
+    sourcePostId: blogId,
+  })
+
+  revalidatePath("/socials")
+  return saved.id
+}

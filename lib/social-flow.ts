@@ -1,20 +1,31 @@
-// Making a post runs across three screens now — the brief, on the Socials home;
-// the deck of versions; the workspace — and only the first of them holds any
-// state. The other two rebuild what they show from the URL, which is what lets
-// them be pages: ones you can land on, link to, and step back to when you want
-// a different version.
+// Making a post runs across three screens — the brief, on the Socials home; the
+// deck of versions; the workspace.
 //
-// That works because the generator is deterministic. The same brief and the
-// same variant number always come back with the same words, so a draft never
-// has to be carried from one screen to the next. Its number is enough.
+// The URL carries what to write *about*, which is what lets the deck be a page:
+// one you can land on, link to, and reload. It no longer carries which draft
+// you picked. It used to, because the generator was deterministic — the same
+// brief and the same version number rebuilt the same words, so nothing had to
+// travel but the number.
+//
+// A model does not write the same post twice. So the deck's output is saved as
+// a draft post when you choose it, and the workspace opens that. The practical
+// difference: coming back to the deck deals a fresh three rather than the same
+// three, and the post you picked is safe in the database either way.
 
-import { findPlatform, SOCIAL_PLATFORM_IDS } from "@/lib/connectors"
-import { shapeFor } from "@/lib/social-draft"
-import {
-  generateFromBlogTitle,
-  generateSocialPost,
-  nameFrom,
-} from "@/lib/social-generator"
+import { SOCIAL_PLATFORM_IDS } from "@/lib/connectors"
+
+/** A short internal label for the post. Never posted — it is what the list
+    shows in place of a title, since a social post does not have one. */
+export function nameFrom(text: string): string {
+  const first = (text.trim().split(/\n|(?<=[.!?])\s/)[0] ?? "").trim()
+  const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(" ")
+  const trimmed = words.replace(/[.,;:!?]+$/, "")
+
+  if (!trimmed) {
+    return "Untitled post"
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
 
 /** How many drafts a generate offers. Three is enough to be a choice and few
     enough to read before choosing. */
@@ -30,48 +41,6 @@ export function nameOf(source: PostSource): string {
   return source.kind === "blog" ? source.text : nameFrom(source.text)
 }
 
-/** Every draft on offer, before any platform has cut it down. */
-export function mastersOf(source: PostSource): string[] {
-  return Array.from({ length: VERSION_COUNT }, (_, variant) =>
-    source.kind === "blog"
-      ? generateFromBlogTitle(source.text, variant)
-      : generateSocialPost(source.text, variant)
-  )
-}
-
-/** The deck: every version, cut to every selected platform's limit. */
-export function versionsOf(
-  source: PostSource,
-  platformIds: string[]
-): Record<string, string[]> {
-  const masters = mastersOf(source)
-
-  return Object.fromEntries(
-    platformIds.flatMap((id) => {
-      const platform = findPlatform(id)
-      return platform
-        ? [[id, masters.map((master) => shapeFor(platform, master))]]
-        : []
-    })
-  )
-}
-
-/** The one draft each platform ended up with, given the version chosen for it. */
-export function draftsOf(
-  source: PostSource,
-  platformIds: string[],
-  chosen: Record<string, number>
-): Record<string, string> {
-  const versions = versionsOf(source, platformIds)
-
-  return Object.fromEntries(
-    platformIds.flatMap((id) => {
-      const text = versions[id]?.[chosen[id] ?? 0]
-      return text ? [[id, text]] : []
-    })
-  )
-}
-
 // Everything below is the URL, read and written. Unknown platforms are dropped
 // rather than trusted: these values are typed by hand as readily as they are
 // linked to.
@@ -84,27 +53,6 @@ export function parsePlatformIds(value: string | undefined): string[] {
 
   // Registry order, so two links naming the same platforms are the same link.
   return SOCIAL_PLATFORM_IDS.filter((id) => ids.includes(id))
-}
-
-/** "linkedin:1,x:0" — which version each platform settled on. */
-export function parseChosen(value: string | undefined): Record<string, number> {
-  const chosen: Record<string, number> = {}
-
-  for (const pair of (value ?? "").split(",")) {
-    const [id, index] = pair.split(":")
-    const variant = Number(index)
-    if (findPlatform(id) && Number.isInteger(variant)) {
-      chosen[id] = Math.min(Math.max(variant, 0), VERSION_COUNT - 1)
-    }
-  }
-
-  return chosen
-}
-
-export function formatChosen(chosen: Record<string, number>): string {
-  return Object.entries(chosen)
-    .map(([id, variant]) => `${id}:${variant}`)
-    .join(",")
 }
 
 /**
@@ -128,30 +76,6 @@ function sourceParams(ref: SourceRef, platformIds: string[]) {
 
 export function versionsHref(ref: SourceRef, platformIds: string[]): string {
   return `/socials/versions?${sourceParams(ref, platformIds)}`
-}
-
-export function editorHref(
-  ref: SourceRef,
-  platformIds: string[],
-  chosen: Record<string, number>
-): string {
-  const params = sourceParams(ref, platformIds)
-  params.set("variants", formatChosen(chosen))
-  return `/socials/editor?${params}`
-}
-
-/** The link back from the workspace to the deck it came through. */
-export function refFromParams(params: {
-  brief?: string
-  blog?: string
-}): SourceRef | undefined {
-  if (params.blog) {
-    return { kind: "blog", blogId: params.blog }
-  }
-  if (params.brief?.trim()) {
-    return { kind: "brief", brief: params.brief }
-  }
-  return undefined
 }
 
 /** The workspace, opened with nothing in it. */

@@ -1,7 +1,7 @@
 // Fitting text to a platform's limit. This file used to also turn a blog draft
 // into a first pass at a social post, for the composer the blog editor carried.
 // Blogger publishes to HubSpot now and composes nothing, so that went with it —
-// writing a post about a post is Social Studio's job, and lib/social-generator.ts
+// writing a post about a post is Social Studio's job, and lib/ai/social.ts
 // does it there.
 
 import type { Platform } from "@/lib/connectors"

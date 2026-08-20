@@ -8,9 +8,9 @@ Two products in one app:
   social copy for LinkedIn and X, then post it now or schedule it.
 
 Blogger is functional end to end: real accounts, a real database, real
-generation, and posts that land on a live HubSpot blog. Social Studio keeps its
-drafts, schedules and state in the same database, but does not send to LinkedIn
-or X yet and still writes its copy from templates. See **What is and isn't
+generation, and posts that land on a live HubSpot blog. Social Studio writes its
+copy with Claude and keeps drafts, schedules and state in the same database —
+it just does not send to LinkedIn or X yet. See **What is and isn't
 real** below.
 
 ## Setup
@@ -50,7 +50,9 @@ Full walkthroughs live in `ai/guide/`: `tidb-cloud-setup.md` and
   `?prompt=`/`?title=` opens an empty one that generates on arrival. Two ways
   out: **Save as draft**, or **Publish to HubSpot**.
 - **`/socials`** — social posts, as a list or a calendar, with a summary strip.
-- **`/socials/versions`** — three drafts per platform, dealt as a deck.
+- **`/socials/versions`** — three drafts per platform, written on arrival and
+  dealt as a deck. Choosing saves them as a draft post: a model does not write
+  the same post twice, so the words are carried rather than rebuilt from the URL.
 - **`/socials/editor`** — the chosen draft per platform, with live previews:
   save as a draft, schedule it, or post it now.
 
@@ -70,13 +72,16 @@ its id so a second publish updates rather than duplicates. Setup:
 variants live in TiDB, and a schedule is a real timestamp a worker can query
 (`dueSocialPosts()`).
 
-**Not real yet** — sending to LinkedIn and X, and the copy Social Studio writes.
-Publishing a social post records it without calling any network, and
-`lib/social-generator.ts` is still deterministic templates rather than a model.
+**Real** — the social copy. `/api/generate-social` writes three drafts per
+platform in one Claude call, so the same argument is said at 3,000 characters
+and at 280 rather than three unrelated posts about the same subject. Each is
+checked against the platform's limit before it is offered.
 
-Sending is blocked outside the code: LinkedIn needs an app approved for
-`w_member_social`, X needs a paid API tier. Settings shows both as "Awaiting API
-access" rather than offering a button that cannot finish.
+**Not real yet** — sending to LinkedIn and X. Publishing a social post records
+it without calling any network, which is blocked outside the code: LinkedIn
+needs an app approved for `w_member_social`, X needs a paid API tier. Settings
+shows both as "Awaiting API access" rather than offering a button that cannot
+finish.
 
 ### Generation
 

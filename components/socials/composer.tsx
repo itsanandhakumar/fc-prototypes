@@ -28,7 +28,7 @@ import {
 } from "@/lib/connectors"
 import type { SocialPost, SocialVariant } from "@/lib/social-data"
 import { formatCount } from "@/lib/social-insights"
-import { nameFrom } from "@/lib/social-generator"
+import { nameFrom } from "@/lib/social-flow"
 import { formatLeadTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
