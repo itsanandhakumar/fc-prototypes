@@ -7,9 +7,11 @@ Two products in one app:
 - **Social Studio** — turn a brief or an existing blog post into per-platform
   social copy for LinkedIn and X, then post it now or schedule it.
 
-Blogger is functional: real accounts, a real database, real generation. Social
-Studio is still Anand's prototype — the UI is complete and the flow is real, but
-nothing is sent to LinkedIn or X yet. See **What is and isn't real** below.
+Blogger is functional end to end: real accounts, a real database, real
+generation, and posts that land on a live HubSpot blog. Social Studio keeps its
+drafts, schedules and state in the same database, but does not send to LinkedIn
+or X yet and still writes its copy from templates. See **What is and isn't
+real** below.
 
 ## Setup
 
