@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 
 import {
   loginWithGoogle,
@@ -19,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth"
+import { FORGOT_PASSWORD_ROUTE, MIN_PASSWORD_LENGTH } from "@/lib/auth"
 
 function GoogleIcon() {
   return (
@@ -119,7 +120,14 @@ export default function LoginPage() {
                     <span className="text-xs/relaxed text-muted-foreground">
                       {MIN_PASSWORD_LENGTH}+ characters
                     </span>
-                  ) : null}
+                  ) : (
+                    <Link
+                      href={FORGOT_PASSWORD_ROUTE}
+                      className="text-xs/relaxed text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
                 </div>
                 <Input
                   id="password"

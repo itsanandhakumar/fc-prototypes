@@ -1,9 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server"
 
-import { HOME_ROUTE, LOGIN_ROUTE, SESSION_COOKIES } from "@/lib/auth"
+import {
+  HOME_ROUTE,
+  LOGIN_ROUTE,
+  SESSION_COOKIES,
+  isPublicRoute,
+} from "@/lib/auth"
 
-// Nothing is reachable before login: any route other than the login screen
-// redirects back to it without a session.
+// Nothing is reachable before login except the handful of routes that exist
+// for people who cannot log in — the login screen itself and password reset.
 //
 // This only checks that a session cookie is *present*. It is a routing hint,
 // not the security boundary — the cookie is signed, but verifying it needs the
@@ -13,13 +18,16 @@ export function proxy(request: NextRequest) {
   const isLoggedIn = SESSION_COOKIES.some((name) =>
     Boolean(request.cookies.get(name)?.value)
   )
-  const isLoginRoute = request.nextUrl.pathname === LOGIN_ROUTE
+  const { pathname } = request.nextUrl
 
-  if (!isLoggedIn && !isLoginRoute) {
+  if (!isLoggedIn && !isPublicRoute(pathname)) {
     return NextResponse.redirect(new URL(LOGIN_ROUTE, request.url))
   }
 
-  if (isLoggedIn && isLoginRoute) {
+  // Only the login screen bounces a signed-in visitor onwards. The reset pages
+  // do not: changing your password while already signed in somewhere else is a
+  // reasonable thing to be doing, and a redirect would strip the token.
+  if (isLoggedIn && pathname === LOGIN_ROUTE) {
     return NextResponse.redirect(new URL(HOME_ROUTE, request.url))
   }
 

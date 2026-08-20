@@ -4,6 +4,21 @@
 
 export const HOME_ROUTE = "/blogger"
 export const LOGIN_ROUTE = "/"
+export const FORGOT_PASSWORD_ROUTE = "/forgot-password"
+export const RESET_PASSWORD_ROUTE = "/reset-password"
+
+/** Reachable without a session. Password reset is the whole reason this list
+    exists: someone who cannot log in is by definition logged out, so sending
+    these back to the login screen would make the feature unreachable. */
+export const PUBLIC_ROUTES = [
+  LOGIN_ROUTE,
+  FORGOT_PASSWORD_ROUTE,
+  RESET_PASSWORD_ROUTE,
+] as const
+
+export function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some((route) => route === pathname)
+}
 
 // Auth.js names its session cookie by environment: the secure variant is only
 // set over HTTPS. The proxy checks for either rather than guessing which one it

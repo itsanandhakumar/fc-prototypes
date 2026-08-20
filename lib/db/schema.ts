@@ -86,6 +86,42 @@ export const verificationTokens = mysqlTable(
   (token) => [primaryKey({ columns: [token.identifier, token.token] })]
 )
 
+// ---------------------------------------------------------------------------
+// Password resets
+//
+// Auth.js has `verificationToken`, but that table belongs to the adapter and is
+// keyed by (identifier, token) for magic links. Password resets need their own
+// lifecycle — single use, short expiry, and a record of having been spent — so
+// they get their own table rather than sharing one whose shape we do not own.
+// ---------------------------------------------------------------------------
+
+export const passwordResetTokens = mysqlTable(
+  "password_reset_token",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: varchar("userId", { length: 255 }).notNull(),
+    /** SHA-256 of the token that went out in the email, never the token itself.
+        A leaked database then yields no usable reset links — the only copy of
+        the real token is in the recipient's inbox. */
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expiresAt", { mode: "date" }).notNull(),
+    /** Set the moment it is spent. Kept rather than deleted so a second click
+        can say "already used" instead of the same message a forged token
+        gets. */
+    usedAt: timestamp("usedAt", { mode: "date" }),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (token) => [
+    // The only lookup is by hash, and it has to be fast enough that a wrong
+    // token costs the same as a right one.
+    index("reset_token_hash_idx").on(token.tokenHash),
+    // For rate limiting: "has this account asked recently?"
+    index("reset_user_created_idx").on(token.userId, token.createdAt),
+  ]
+)
+
 export type PostStatus = "draft" | "published"
 
 /** The instructions a draft was written from, kept with the post so the editor
@@ -266,6 +302,7 @@ export const socialVariants = mysqlTable(
   (variant) => [index("variant_post_idx").on(variant.socialPostId)]
 )
 
+export type PasswordResetTokenRow = typeof passwordResetTokens.$inferSelect
 export type UserRow = typeof users.$inferSelect
 export type PostRow = typeof posts.$inferSelect
 export type NewPostRow = typeof posts.$inferInsert
