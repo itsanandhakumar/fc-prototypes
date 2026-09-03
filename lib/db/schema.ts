@@ -191,15 +191,30 @@ export type ConnectionProvider = "hubspot" | "linkedin" | "x"
 /** Everything a provider needs beyond the token. Shape varies per provider,
     which is why it is JSON rather than columns. */
 export type ConnectionMeta = {
-  /** HubSpot: the blog to publish into (`contentGroupId`). */
+  /** HubSpot: the blog to publish into (`contentGroupId`). Its absence is how
+      a connection that has finished OAuth but has not yet been pointed at a
+      blog is told apart from a finished one — see `needsSetup` in Settings. */
   blogId?: string
-  /** HubSpot: who the post is filed under. */
+  /** HubSpot: the blog's own name, so Settings can say which one without
+      another round trip. */
+  blogName?: string
+  /** HubSpot: the default author a post is filed under. Overridable per post
+      in the publish dialog. */
   authorId?: string
   authorName?: string
-  /** HubSpot: e.g. "en-us". Asked once at connect time. */
+  /** HubSpot: the language every post on this blog is filed under, e.g. "en".
+      Asked once at connect time because changing it re-files the whole blog. */
   language?: string
   /** Where published posts appear, for building a preview URL. */
   domain?: string
+  /** HubSpot: the portal the OAuth grant is against. */
+  portalId?: number
+  /** HubSpot: the portal's own domain, which names the account better than its
+      id does. */
+  hubDomain?: string
+  /** What the customer actually granted. Kept so a call that fails for a
+      missing scope can say which one, instead of guessing. */
+  scopes?: string[]
 }
 
 export const connections = mysqlTable(

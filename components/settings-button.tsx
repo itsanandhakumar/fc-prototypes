@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { Settings } from "lucide-react"
 
 import { SettingsDialog } from "@/components/settings-dialog"
@@ -13,6 +14,7 @@ export function SettingsButton({
   defaultBodyView,
   connectedIds,
   hubspotLabel,
+  hubspotNeedsSetup,
   name,
   email,
   image,
@@ -21,11 +23,27 @@ export function SettingsButton({
   connectedIds: string[]
   /** Which portal and blog, once connected. */
   hubspotLabel?: string | null
+  /** Approved in HubSpot, but not yet pointed at a blog. */
+  hubspotNeedsSetup?: boolean
   name: string
   email: string
   image: string | null
 }) {
-  const [open, setOpen] = React.useState(false)
+  // Coming back from HubSpot's consent screen lands on /blogger, because a
+  // dialog has no address of its own to return to. The callback says where the
+  // customer was going, and this puts them back there — open, on Connectors,
+  // rather than on a page that looks like nothing happened.
+  const params = useSearchParams()
+  const requested = params.get("settings")
+  const hubspotError = params.get("hubspotError")
+
+  // Open is derived rather than synchronised: the URL decides until someone
+  // opens or closes the dialog by hand, and from then on they do. An effect
+  // that pushed the URL into state would fight the customer for the close
+  // button, since the parameter is still there after they press it.
+  const [override, setOverride] = React.useState<boolean | null>(null)
+  const open = override ?? Boolean(requested)
+  const setOpen = setOverride
 
   return (
     <>
@@ -44,6 +62,9 @@ export function SettingsButton({
         defaultBodyView={defaultBodyView}
         connectedIds={connectedIds}
         hubspotLabel={hubspotLabel}
+        hubspotNeedsSetup={hubspotNeedsSetup}
+        hubspotError={hubspotError}
+        initialSection={requested === "connectors" ? "connectors" : undefined}
         name={name}
         email={email}
         image={image}

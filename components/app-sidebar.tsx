@@ -22,6 +22,10 @@ export async function AppSidebar() {
   const hubspot = (await connectionSummaries(user.id)).find(
     (summary) => summary.provider === "hubspot"
   )
+  // Approved in HubSpot but never pointed at a blog. The grant is real, so the
+  // provider counts as connected everywhere else; what is missing is the half
+  // of setup that can only be asked after the round trip.
+  const hubspotNeedsSetup = Boolean(hubspot && !hubspot.meta?.blogId)
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -48,6 +52,7 @@ export async function AppSidebar() {
           defaultBodyView={defaultBodyView}
           connectedIds={connectedIds}
           hubspotLabel={hubspot?.accountLabel ?? null}
+          hubspotNeedsSetup={hubspotNeedsSetup}
           name={displayNameOf(user.name, user.email)}
           email={user.email}
           image={user.image}

@@ -84,6 +84,7 @@ export function EditorWorkspace({
   brief,
   savedPost,
   hubspotConnected,
+  hubspotNeedsSetup,
   generateOnMount,
   requestedTitle,
 }: {
@@ -97,6 +98,8 @@ export function EditorWorkspace({
   savedPost?: { id: string; title: string; status: PostStatus }
   /** Whether there is a connected blog to publish to. */
   hubspotConnected: boolean
+  /** Approved in HubSpot, but not yet pointed at a blog. */
+  hubspotNeedsSetup?: boolean
   /** A fresh draft generates as soon as the editor is on screen. */
   generateOnMount: boolean
   /** Set when the draft is being written to a headline the writer chose. */
@@ -506,6 +509,7 @@ export function EditorWorkspace({
               brief={brief}
               insights={insights}
               connected={hubspotConnected}
+              needsSetup={hubspotNeedsSetup}
               disabled={running || !hasDraft}
             />
           ) : (

@@ -153,6 +153,9 @@ export function SettingsDialog({
   defaultBodyView,
   connectedIds,
   hubspotLabel,
+  hubspotNeedsSetup,
+  hubspotError,
+  initialSection,
   name,
   email,
   image,
@@ -163,11 +166,20 @@ export function SettingsDialog({
   /** Blog and social destinations this account has connected. */
   connectedIds: string[]
   hubspotLabel?: string | null
+  /** Approved in HubSpot, but not yet pointed at a blog. */
+  hubspotNeedsSetup?: boolean
+  /** Whatever went wrong on the way back from HubSpot. */
+  hubspotError?: string | null
+  /** Which pane to land on. Set when something outside sent the customer here
+      — returning from HubSpot opens on Connectors, not on Account. */
+  initialSection?: SectionId
   name: string
   email: string
   image: string | null
 }) {
-  const [section, setSection] = React.useState<SectionId>("account")
+  const [section, setSection] = React.useState<SectionId>(
+    initialSection ?? "account"
+  )
   // `theme` is undefined until next-themes has read storage, which has happened
   // long before the dialog can be opened.
   const { theme, setTheme, resolvedTheme } = useTheme()
@@ -252,6 +264,8 @@ export function SettingsDialog({
               <ConnectorList
                 connectedIds={connectedIds}
                 hubspotLabel={hubspotLabel}
+                hubspotNeedsSetup={hubspotNeedsSetup}
+                hubspotError={hubspotError}
               />
             ) : null}
           </div>

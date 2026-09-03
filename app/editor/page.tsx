@@ -7,7 +7,7 @@ import {
   parseTargetCharacters,
   type DraftBrief,
 } from "@/lib/draft-generator"
-import { connectedProviders } from "@/lib/connections"
+import { connectionSummaries } from "@/lib/connections"
 import { getPost } from "@/lib/post-store"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
 import { requireUser } from "@/lib/session"
@@ -59,9 +59,13 @@ export default async function EditorPage({
   const defaultBodyView = parseBodyView(
     cookieStore.get(BODY_VIEW_COOKIE)?.value
   )
-  const hubspotConnected = (await connectedProviders(user.id)).includes(
-    "hubspot"
+  const hubspot = (await connectionSummaries(user.id)).find(
+    (summary) => summary.provider === "hubspot"
   )
+  const hubspotConnected = Boolean(hubspot)
+  // A grant with no blog behind it cannot publish anything, so the dialog says
+  // so and offers the rest of setup rather than a form that would fail on send.
+  const hubspotNeedsSetup = Boolean(hubspot && !hubspot.meta?.blogId)
 
   return (
     <AppShell
@@ -87,6 +91,7 @@ export default async function EditorPage({
           post && { id: post.id, title: post.title, status: post.status }
         }
         hubspotConnected={hubspotConnected}
+        hubspotNeedsSetup={hubspotNeedsSetup}
         generateOnMount={shouldGenerate}
         requestedTitle={requestedTitle}
       />
