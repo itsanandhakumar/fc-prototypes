@@ -110,7 +110,21 @@ export function PublishDialog({
   // stops, because a slug they chose is not a slug we may overwrite.
   const [slugEdited, setSlugEdited] = React.useState(false)
   const [authorId, setAuthorId] = React.useState("")
-  const [tags, setTags] = React.useState<Tag[]>([])
+  // Tags start as the draft's working keywords — the terms the analysis says
+  // the post genuinely covers, which is the same question a tag answers. Gap
+  // keywords are deliberately not here: they name what the draft does *not*
+  // cover, and tagging a post with those would be a lie to the reader and to
+  // search.
+  const keywords = React.useMemo(
+    () => insights?.workingKeywords ?? [],
+    [insights]
+  )
+  const [tags, setTags] = React.useState<Tag[]>(() =>
+    keywords.map((name) => ({ name }))
+  )
+  // Once the writer has had an opinion about the tags, the analysis stops
+  // getting one.
+  const [tagsTouched, setTagsTouched] = React.useState(false)
   const [tagDraft, setTagDraft] = React.useState("")
   const [metaDescription, setMetaDescription] = React.useState(
     insights?.metaDescription ?? ""
@@ -158,6 +172,20 @@ export function PublishDialog({
     }
   }
 
+  // The analysis usually lands after this component mounts, and Regenerate
+  // replaces it, so the keywords are picked up whenever they change rather than
+  // only at mount. Matching an existing HubSpot tag is left to the server:
+  // `resolveTags` looks a name up before creating one, so a keyword the portal
+  // already has as a tag reuses it instead of making a near-duplicate.
+  const keywordKey = keywords.join("\u0000")
+  const [lastKeywordKey, setLastKeywordKey] = React.useState(keywordKey)
+  if (keywordKey !== lastKeywordKey) {
+    setLastKeywordKey(keywordKey)
+    if (!tagsTouched) {
+      setTags(keywords.map((name) => ({ name })))
+    }
+  }
+
   function addTag(value: string) {
     const trimmed = value.trim()
     if (!trimmed) {
@@ -173,6 +201,7 @@ export function PublishDialog({
         ? current
         : [...current, known ?? { name: trimmed }]
     )
+    setTagsTouched(true)
     setTagDraft("")
   }
 
@@ -362,11 +391,12 @@ export function PublishDialog({
                           <button
                             type="button"
                             aria-label={`Remove ${tag.name}`}
-                            onClick={() =>
+                            onClick={() => {
+                              setTagsTouched(true)
                               setTags((current) =>
                                 current.filter((item) => item.name !== tag.name)
                               )
-                            }
+                            }}
                             className="text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
                           >
                             <X className="size-3" />
