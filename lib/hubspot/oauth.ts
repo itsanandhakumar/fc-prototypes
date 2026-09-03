@@ -248,7 +248,10 @@ export async function tokenInfo(
         client_id: config.clientId,
         client_secret: config.clientSecret,
         token_type_hint: "access_token",
-        access_token: token,
+        // `token`, not `access_token`. HubSpot's own reference for this
+        // endpoint names it `access_token`; the API rejects that with a 400
+        // listing `client_id, client_secret, token` as the required set.
+        token,
       }).toString(),
       cache: "no-store",
     })
@@ -261,8 +264,13 @@ export async function tokenInfo(
   }
 
   if (!response.ok) {
+    // HubSpot names the offending parameter in the body, and a bare status
+    // here cost an afternoon once. Pass it through.
+    const detail = (await response.text()).slice(0, 300)
     throw new HubSpotAuthError(
-      `HubSpot would not describe the token (${response.status}).`,
+      `HubSpot would not describe the token (${response.status})${
+        detail ? ` — ${detail}` : ""
+      }.`,
       true
     )
   }
