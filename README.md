@@ -32,6 +32,7 @@ Then open http://localhost:3000 and create an account.
 | `AUTH_SECRET` | `npx auth secret` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud → Credentials → OAuth client ID (Web application). Redirect URI: `http://localhost:3000/api/auth/callback/google` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Run `claude setup-token` |
+| `HUBSPOT_CLIENT_ID` / `HUBSPOT_CLIENT_SECRET` | A HubSpot **developer account** → your app → Auth. Only needed to publish; see `ai/guide/hubspot-oauth-setup.md` |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Resend → API Keys. `EMAIL_FROM` must be on a domain verified in Resend. Password reset email only — see `ai/guide/resend-setup.md` |
 
 You also need the Claude Code CLI on `PATH`
@@ -67,10 +68,11 @@ rich-text editor. Every post query is scoped by `userId`, which is also the
 whole authorisation model: a guessed post id returns nothing rather than someone
 else's draft.
 
-**Real** — HubSpot publishing. Connect a portal in Settings and **Publish to
-HubSpot** creates the post on your live blog through the CMS v3 API, then stores
-its id so a second publish updates rather than duplicates. Setup:
-`ai/guide/hubspot-setup.md`.
+**Real** — HubSpot publishing, over OAuth. Connect in Settings and you are sent
+to HubSpot to choose a portal and approve access; **Publish to HubSpot** then
+creates the post on your live blog through the CMS v3 API and stores its id, so
+a second publish updates rather than duplicates. Setup:
+`ai/guide/hubspot-oauth-setup.md`.
 
 **Real** — social drafts, schedules and their state. Posts and their per-platform
 variants live in TiDB, and a schedule is a real timestamp a worker can query
@@ -115,6 +117,33 @@ Two consequences worth knowing:
   home directory. Deploy to a VPS or container, not Vercel.
 
 Swapping back to the HTTP API means changing those two files and nothing else.
+
+### The HubSpot connector
+
+Connecting is an OAuth round trip, not a pasted token. `/api/connectors/hubspot/start`
+sends the customer to HubSpot's consent screen with a `state` nonce in an
+httpOnly cookie; the callback checks it back, exchanges the code and stores the
+grant. Forward never handles a HubSpot credential, and either side can revoke.
+
+It lands in two halves. The callback saves working tokens with no blog chosen,
+because the blogs, authors and languages can only be listed once there *is* a
+token — so Settings reads a connection with no `blogId` as "finish this" and
+asks for the blog and its language there. That also means a closed tab resumes
+rather than restarts.
+
+Access tokens last 30 minutes. Nothing may read `connection.accessToken`
+directly: `hubspotSession()` in `lib/hubspot/token.ts` refreshes on the way past
+and is the only supported way to get one.
+
+Two scopes: `content` for posts, authors and tags, `files` for uploading a
+featured image into the portal's file manager.
+
+Publishing is two calls because HubSpot makes it two — a POST creates a draft
+whatever `state` says, and a PATCH against a live post edits its buffered draft.
+So the body goes up, then the transition is asked for separately. HubSpot's
+required set for publishing is name, blog, slug, author, meta description and a
+decision about the featured image, which is exactly what the publish dialog
+asks for.
 
 ### The editor
 

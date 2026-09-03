@@ -4,68 +4,107 @@ import * as React from "react"
 import { AlertTriangle, Check, Loader2, Plug, Unplug } from "lucide-react"
 
 import {
-  connectHubSpot,
   disconnectProvider,
-  inspectHubSpotToken,
+  finishHubSpotSetup,
+  hubspotSetupOptions,
 } from "@/app/connector-actions"
 import { PlatformGlyph } from "@/components/editor/platform-glyph"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { HUBSPOT, PLATFORMS, SOCIAL_PLATFORM_IDS } from "@/lib/connectors"
+import { cn } from "@/lib/utils"
 
-// Connecting HubSpot is a two-step exchange rather than a single form: the
-// token has to be proven against the API before it is stored, and the blog and
-// author it can reach are only knowable once it has been. A token that turns
-// out to be wrong therefore fails here, with HubSpot's own message, instead of
-// silently at publish time.
+// Connecting HubSpot is a round trip through HubSpot's own consent screen, not
+// a form. The customer approves Forward from inside their portal, which means
+// we never handle a credential of theirs and either side can revoke it later —
+// neither of which was true of the pasted private-app token this replaces.
+//
+// It comes back in two halves. The grant arrives first and is stored by the
+// callback; the blog, language and author can only be listed once there is a
+// token to list them with, so they are asked here, on return. A connection
+// caught between the two is not broken — it is just unfinished, and says so.
 
 type Blog = { id: string; name: string; url?: string; language?: string }
 type Author = { id: string; name: string }
 
+// HubSpot's blog languages are ISO 639 codes, sometimes with a region. The
+// blog's own setting wins over anything in this list; it is here for the
+// portal that has never set one.
 const LANGUAGES = [
+  { value: "en", label: "English" },
   { value: "en-us", label: "English (United States)" },
   { value: "en-gb", label: "English (United Kingdom)" },
   { value: "en-in", label: "English (India)" },
-  { value: "de-de", label: "German" },
-  { value: "fr-fr", label: "French" },
-  { value: "es-es", label: "Spanish" },
+  { value: "de", label: "German" },
+  { value: "fr", label: "French" },
+  { value: "es", label: "Spanish" },
+  { value: "pt-br", label: "Portuguese (Brazil)" },
+  { value: "ja", label: "Japanese" },
 ]
 
 const FIELD =
   "w-full rounded-md border border-input bg-input/20 px-2 py-1.5 text-xs/relaxed outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30"
 
-function HubSpotConnect({ onDone }: { onDone: () => void }) {
-  const [token, setToken] = React.useState("")
-  const [error, setError] = React.useState<string | null>(null)
-  const [checking, setChecking] = React.useState(false)
-  const [saving, setSaving] = React.useState(false)
+const START_URL = "/api/connectors/hubspot/start"
 
-  const [label, setLabel] = React.useState("")
+function Problem({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      role="alert"
+      className="flex items-start gap-2 text-xs/relaxed text-destructive"
+    >
+      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+      {children}
+    </p>
+  )
+}
+
+/** The half of connecting that happens after HubSpot hands the customer back. */
+function HubSpotSetup() {
+  const [loading, setLoading] = React.useState(true)
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const [portalLabel, setPortalLabel] = React.useState("HubSpot")
   const [blogs, setBlogs] = React.useState<Blog[]>([])
   const [authors, setAuthors] = React.useState<Author[]>([])
   const [blogId, setBlogId] = React.useState("")
   const [authorId, setAuthorId] = React.useState("")
-  const [language, setLanguage] = React.useState("en-us")
+  const [language, setLanguage] = React.useState("en")
 
-  async function check() {
-    setChecking(true)
-    setError(null)
-    try {
-      const result = await inspectHubSpotToken(token)
-      if (result.error) {
-        setError(result.error)
+  React.useEffect(() => {
+    let live = true
+    void (async () => {
+      const result = await hubspotSetupOptions()
+      if (!live) {
         return
       }
-      setLabel(result.label ?? "HubSpot")
-      setBlogs(result.blogs ?? [])
-      setAuthors(result.authors ?? [])
-      setBlogId(result.blogs?.[0]?.id ?? "")
-      setAuthorId(result.authors?.[0]?.id ?? "")
-      // A blog that declares its own language should win over the default.
-      setLanguage(result.blogs?.[0]?.language ?? "en-us")
-    } finally {
-      setChecking(false)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setPortalLabel(result.portalLabel ?? "HubSpot")
+        setBlogs(result.blogs ?? [])
+        setAuthors(result.authors ?? [])
+        setBlogId(result.blogs?.[0]?.id ?? "")
+        setAuthorId(result.authors?.[0]?.id ?? "")
+        // A blog that declares its own language should win over the default:
+        // it is the one HubSpot will actually file posts under.
+        setLanguage(result.blogs?.[0]?.language ?? "en")
+      }
+      setLoading(false)
+    })()
+    return () => {
+      live = false
+    }
+  }, [])
+
+  // Switching blogs re-reads that blog's language rather than keeping the
+  // previous one, which would quietly file posts under the wrong one.
+  function chooseBlog(id: string) {
+    setBlogId(id)
+    const blog = blogs.find((candidate) => candidate.id === id)
+    if (blog?.language) {
+      setLanguage(blog.language)
     }
   }
 
@@ -77,42 +116,62 @@ function HubSpotConnect({ onDone }: { onDone: () => void }) {
     setSaving(true)
     setError(null)
     try {
-      const result = await connectHubSpot({
-        token,
+      const result = await finishHubSpotSetup({
         blogId: blog.id,
         blogName: blog.name,
         domain: blog.url,
+        language,
         authorId: authorId || undefined,
         authorName: authors.find((a) => a.id === authorId)?.name,
-        language,
-        label,
       })
       if (result.error) {
         setError(result.error)
-        return
       }
-      onDone()
+      // On success the page revalidates and this panel is replaced by the
+      // connected row, so there is nothing to reset.
     } finally {
       setSaving(false)
     }
   }
 
-  // Once the token is proven, the panel becomes the choice of where posts land.
-  if (blogs.length) {
+  if (loading) {
     return (
-      <div className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <p className="text-xs/relaxed text-muted-foreground">
-          Connected to <span className="font-medium text-foreground">{label}</span>.
-          Choose where posts are published.
-        </p>
+      <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-xs/relaxed text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        Reading your HubSpot account…
+      </div>
+    )
+  }
 
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+      <div className="flex flex-col gap-0.5">
+        <h4 className="text-xs font-medium">Choose your blog’s language</h4>
+        <p className="text-xs/relaxed text-muted-foreground">
+          Posts published to {HUBSPOT.name} are filed under one language. You
+          are only asked this once.
+        </p>
+      </div>
+
+      {/* The portal, as HubSpot named it. Read-only: it is what was just
+          approved, and changing it means connecting again. */}
+      <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+        <PlatformGlyph platformId={HUBSPOT.id} className="size-4 shrink-0" />
+        <span className="min-w-0 truncate text-xs font-medium">
+          {portalLabel}
+        </span>
+      </div>
+
+      {/* One blog needs no question; several do. HubSpot files a post under a
+          `contentGroupId`, so this is the choice that decides where it lands. */}
+      {blogs.length > 1 ? (
         <div className="grid gap-1.5">
           <Label htmlFor="hs-blog">Blog</Label>
           <select
             id="hs-blog"
             className={FIELD}
             value={blogId}
-            onChange={(event) => setBlogId(event.target.value)}
+            onChange={(event) => chooseBlog(event.target.value)}
           >
             {blogs.map((blog) => (
               <option key={blog.id} value={blog.id}>
@@ -121,98 +180,66 @@ function HubSpotConnect({ onDone }: { onDone: () => void }) {
             ))}
           </select>
         </div>
-
-        {authors.length ? (
-          <div className="grid gap-1.5">
-            <Label htmlFor="hs-author">Author</Label>
-            <select
-              id="hs-author"
-              className={FIELD}
-              value={authorId}
-              onChange={(event) => setAuthorId(event.target.value)}
-            >
-              {authors.map((author) => (
-                <option key={author.id} value={author.id}>
-                  {author.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
-
-        <div className="grid gap-1.5">
-          <Label htmlFor="hs-language">Language</Label>
-          {/* HubSpot files every post under one language, and changing it later
-              re-files the whole blog — so it is asked once, here. */}
-          <select
-            id="hs-language"
-            className={FIELD}
-            value={language}
-            onChange={(event) => setLanguage(event.target.value)}
-          >
-            {LANGUAGES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {error ? (
-          <p role="alert" className="text-xs/relaxed text-destructive">
-            {error}
-          </p>
-        ) : null}
-
-        <Button
-          type="button"
-          className={HUBSPOT.button}
-          disabled={saving || !blogId}
-          onClick={save}
-        >
-          {saving ? <Loader2 className="animate-spin" /> : <Plug />}
-          {saving ? "Connecting…" : `Connect ${HUBSPOT.name}`}
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3 rounded-md border border-border p-3">
-      <div className="grid gap-1.5">
-        <Label htmlFor="hs-token">Private app token</Label>
-        <Input
-          id="hs-token"
-          type="password"
-          autoComplete="off"
-          placeholder="pat-na1-…"
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-        />
+      ) : blogs.length === 1 ? (
         <p className="text-xs/relaxed text-muted-foreground">
-          HubSpot → Settings → Integrations → Private Apps. The app needs the{" "}
-          <code className="rounded bg-muted px-1 py-0.5">content</code> scope.
-        </p>
-      </div>
-
-      {error ? (
-        <p
-          role="alert"
-          className="flex items-start gap-2 text-xs/relaxed text-destructive"
-        >
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          {error}
+          Publishing to{" "}
+          <span className="font-medium text-foreground">{blogs[0].name}</span> —
+          the only blog on this portal.
         </p>
       ) : null}
 
+      <div className="grid gap-1.5">
+        <Label htmlFor="hs-language">Language</Label>
+        <select
+          id="hs-language"
+          className={FIELD}
+          value={language}
+          onChange={(event) => setLanguage(event.target.value)}
+        >
+          {/* A blog can report a code this list does not carry. Keeping it as
+              an option means the setting survives being looked at. */}
+          {LANGUAGES.some((option) => option.value === language) ? null : (
+            <option value={language}>{language}</option>
+          )}
+          {LANGUAGES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {authors.length ? (
+        <div className="grid gap-1.5">
+          <Label htmlFor="hs-author">Default author</Label>
+          <select
+            id="hs-author"
+            className={FIELD}
+            value={authorId}
+            onChange={(event) => setAuthorId(event.target.value)}
+          >
+            {authors.map((author) => (
+              <option key={author.id} value={author.id}>
+                {author.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs/relaxed text-muted-foreground">
+            Filled in for every post. Changeable per post when you publish.
+          </p>
+        </div>
+      ) : null}
+
+      {error ? <Problem>{error}</Problem> : null}
+
       <Button
         type="button"
-        variant="outline"
-        disabled={checking || !token.trim()}
-        onClick={check}
+        className={HUBSPOT.button}
+        disabled={saving || !blogId}
+        onClick={save}
       >
-        {checking ? <Loader2 className="animate-spin" /> : null}
-        {checking ? "Checking with HubSpot…" : "Continue"}
+        {saving ? <Loader2 className="animate-spin" /> : <Plug />}
+        {saving ? "Connecting…" : `Connect ${HUBSPOT.name}`}
       </Button>
     </div>
   )
@@ -223,14 +250,19 @@ export type Kind = "blog" | "social"
 export function ConnectorList({
   connectedIds,
   hubspotLabel,
+  hubspotNeedsSetup,
+  hubspotError,
   only,
 }: {
   connectedIds: string[]
   /** Which portal and blog, once connected. */
   hubspotLabel?: string | null
+  /** Approved in HubSpot, but never pointed at a blog. */
+  hubspotNeedsSetup?: boolean
+  /** Whatever went wrong on the way back from HubSpot. */
+  hubspotError?: string | null
   only?: Kind
 }) {
-  const [connecting, setConnecting] = React.useState(false)
   const [disconnecting, startDisconnecting] = React.useTransition()
 
   const hubspotConnected = connectedIds.includes(HUBSPOT.id)
@@ -249,7 +281,9 @@ export function ConnectorList({
             </p>
           </div>
 
-          {hubspotConnected ? (
+          {hubspotError ? <Problem>{hubspotError}</Problem> : null}
+
+          {hubspotConnected && !hubspotNeedsSetup ? (
             <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2">
                 <PlatformGlyph
@@ -281,22 +315,32 @@ export function ConnectorList({
                 Disconnect
               </Button>
             </div>
-          ) : connecting ? (
-            <HubSpotConnect onDone={() => setConnecting(false)} />
+          ) : hubspotConnected ? (
+            <HubSpotSetup />
           ) : (
             <div className="flex flex-col gap-2">
               <div className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs/relaxed text-muted-foreground">
                 Nothing connected yet.
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-fit"
-                onClick={() => setConnecting(true)}
+              {/* An anchor wearing the button's clothes. It has to be a real
+                  navigation rather than a router push: the next stop is
+                  HubSpot's own domain, and the client router cannot follow a
+                  redirect off the application. */}
+              <a
+                href={START_URL}
+                className={cn(
+                  buttonVariants({ variant: "outline" }),
+                  "w-fit no-underline"
+                )}
               >
                 <Plug />
                 Connect {HUBSPOT.name}
-              </Button>
+              </a>
+              <p className="text-xs/relaxed text-muted-foreground">
+                You will be sent to {HUBSPOT.name} to choose a portal and
+                approve access. Forward never sees your {HUBSPOT.name}{" "}
+                password, and you can revoke it from there at any time.
+              </p>
             </div>
           )}
         </section>
