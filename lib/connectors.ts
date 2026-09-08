@@ -334,6 +334,14 @@ export type BlogDestination = {
    */
   button: string
   /**
+   * The brand colour as a gradient, for a share image generated for a post on
+   * the way to this destination. The social previews carry the same pair for
+   * the same reason (see PlatformChrome) — a generated card should look like
+   * the place it is going.
+   */
+  accent: string
+  accentTo: string
+  /**
    * The same brand colour worn quietly, for a badge that reports a post already
    * went here. A status pill is read in a list of dozens, so it takes the
    * orange as a wash with the ink deepened enough to stay legible on it, rather
@@ -349,6 +357,8 @@ export const HUBSPOT: BlogDestination = {
   domain: "blog.forward.tools",
   button:
     "bg-[#FF7A59] text-white hover:bg-[#F2603C] focus-visible:border-[#FF7A59] focus-visible:ring-[#FF7A59]/40",
+  accent: "#FF7A59",
+  accentTo: "#B0411F",
   badge:
     "bg-[#FF7A59]/15 text-[#B0411F] dark:bg-[#FF7A59]/15 dark:text-[#FF9C82]",
 }

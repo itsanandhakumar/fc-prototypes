@@ -4,7 +4,9 @@ import { cookies } from "next/headers"
 import { BrandLockup } from "@/components/brand-lockup"
 import { SettingsButton } from "@/components/settings-button"
 import { SidebarNav } from "@/components/sidebar-nav"
-import { ACCOUNTS, SESSION_COOKIE } from "@/lib/auth"
+import { ACCOUNTS, HOME_ROUTE, SESSION_COOKIE } from "@/lib/auth"
+import { AUDIT_COMPANY_COOKIE, parseAuditSite } from "@/lib/audit-data"
+import { BLOG_LANGUAGE_COOKIE, parseBlogLanguage } from "@/lib/blog-language"
 import { CONNECTORS_COOKIE, parseConnectedIds } from "@/lib/connectors"
 import { BODY_VIEW_COOKIE, parseBodyView } from "@/lib/preferences"
 
@@ -20,6 +22,12 @@ export async function AppSidebar() {
   const connectedIds = parseConnectedIds(
     cookieStore.get(CONNECTORS_COOKIE)?.value
   )
+  const blogLanguage = parseBlogLanguage(
+    cookieStore.get(BLOG_LANGUAGE_COOKIE)?.value
+  )
+  const auditCompany = parseAuditSite(
+    cookieStore.get(AUDIT_COMPANY_COOKIE)?.value
+  )
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -27,7 +35,7 @@ export async function AppSidebar() {
           read as one line across the window. */}
       <div className="flex h-12 shrink-0 items-center px-3">
         <Link
-          href="/blogger"
+          href={HOME_ROUTE}
           aria-label="Forward"
           className="flex items-center rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
@@ -45,6 +53,8 @@ export async function AppSidebar() {
         <SettingsButton
           defaultBodyView={defaultBodyView}
           connectedIds={connectedIds}
+          blogLanguage={blogLanguage}
+          auditCompany={auditCompany}
           accounts={ACCOUNTS}
           currentEmail={email}
         />

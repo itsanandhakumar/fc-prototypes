@@ -1,12 +1,15 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
+  ArrowRight,
   Check,
   ChevronRight,
   Copy,
   Loader2,
   RefreshCw,
+  Sparkles,
   Undo2,
 } from "lucide-react"
 
@@ -20,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { PostStatus } from "@/lib/blog-data"
+import type { PublishSettings } from "@/lib/blog-publish"
 import { generateBody, type DraftBrief } from "@/lib/draft-generator"
 import {
   buildGenerationSteps,
@@ -72,6 +76,12 @@ export function EditorWorkspace({
   postId,
   savedPost,
   hubspotConnected,
+  blogLanguage,
+  authors,
+  defaultAuthor,
+  publishedWith,
+  fixField,
+  fixNote,
   steps: initialSteps = [],
   relatedPosts = [],
   generating = false,
@@ -86,6 +96,22 @@ export function EditorWorkspace({
   savedPost?: { id: string; title: string; status: PostStatus }
   /** Whether there is a connected blog to publish to. */
   hubspotConnected: boolean
+  /** The language that blog publishes in, once it has been chosen. */
+  blogLanguage?: string
+  /** Who this workspace can publish as, and who it opens on. */
+  authors: string[]
+  defaultAuthor: string
+  /** What this post was published with last time, if it has been. */
+  publishedWith?: PublishSettings
+  /** A field an audit finding sent the writer here to change. */
+  fixField?: "meta" | "image" | "tags" | "body"
+  /** What that finding wants done, why, and how far through the set this is. */
+  fixNote?: {
+    action: string
+    reason: string
+    step?: { at: number; of: number }
+    next?: { title: string; href: string }
+  }
   /** What the app did to produce this draft, for the panel to narrate. */
   steps?: GenerationStep[]
   /** Titles the run cites as already covering this subject. */
@@ -295,6 +321,44 @@ export function EditorWorkspace({
           </div>
         </div>
 
+        {/* A finding that asks for a decision rather than a value — which of
+            two posts should answer a search — has no field to point at, so it
+            points at the writing. The note sits above the body for the same
+            reason the field notes sit above their fields: arriving somewhere
+            without being told why is not an instruction. */}
+        {fixNote && fixField === "body" ? (
+          <div className="flex gap-2 rounded-md bg-primary/10 px-2.5 py-2">
+            <Sparkles
+              className="mt-0.5 size-3.5 shrink-0 text-primary"
+              aria-hidden
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-xs font-medium">{fixNote.action}</span>
+                {fixNote.step ? (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Post {fixNote.step.at} of {fixNote.step.of}
+                  </span>
+                ) : null}
+              </span>
+              <span className="text-xs/relaxed text-muted-foreground">
+                {fixNote.reason}
+              </span>
+              {fixNote.next ? (
+                <Link
+                  href={fixNote.next.href}
+                  className="mt-0.5 flex min-w-0 items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  <span className="min-w-0 truncate">
+                    Then: {fixNote.next.title}
+                  </span>
+                  <ArrowRight className="size-3 shrink-0" aria-hidden />
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {running ? (
           <div
             data-testid="body-loading"
@@ -341,6 +405,18 @@ export function EditorWorkspace({
             body={body}
             brief={{ ...brief, title }}
             connected={hubspotConnected}
+            blogLanguage={blogLanguage}
+            authors={authors}
+            defaultAuthor={defaultAuthor}
+            // The same keywords the panel reports the draft is working, so the
+            // tags it opens with are the ones the writer has been reading.
+            suggestedTags={insights?.workingKeywords ?? []}
+            // Likewise the description the panel already reports, so the
+            // dialog opens on the sentence the writer has been looking at.
+            suggestedMetaDescription={insights?.metaDescription ?? ""}
+            stored={publishedWith}
+            fixField={fixField}
+            fixNote={fixNote}
             disabled={running}
           />
         </div>

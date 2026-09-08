@@ -52,3 +52,23 @@ export function formatLeadTime(minutesAhead: number): string {
   const days = Math.round(minutesAhead / MINUTES_PER_DAY)
   return `in ${days} days`
 }
+
+/**
+ * When something happened, written out in full.
+ *
+ * The rest of this file deliberately never touches a clock, because the server
+ * and the browser would disagree about "now" and the page would flicker. This
+ * one is different: it formats a moment that is already fixed, so there is no
+ * clock to read — but it does resolve the reader's locale and timezone, so it
+ * must only ever be called in the browser. A report is a document, and a
+ * document carries the date it was made rather than how long ago that was.
+ */
+export function formatRunTimestamp(ranAt: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(ranAt))
+}

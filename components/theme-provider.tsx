@@ -49,7 +49,10 @@ function ThemeHotkey() {
         return
       }
 
-      if (event.key.toLowerCase() !== "d") {
+      // `key` is optional in practice, whatever the spec says: a synthetic
+      // keydown — from an extension, a password manager, or a component
+      // dispatching its own — arrives without one, and reading it threw.
+      if (event.key?.toLowerCase() !== "d") {
         return
       }
 

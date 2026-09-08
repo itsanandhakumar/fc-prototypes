@@ -9,6 +9,10 @@ import {
   parseTargetCharacters,
   type DraftBrief,
 } from "@/lib/draft-generator"
+import { ACCOUNTS, findAccount, SESSION_COOKIE } from "@/lib/auth"
+import { FINDINGS } from "@/lib/audit-data"
+import { jobForFinding } from "@/lib/audit-report"
+import { BLOG_LANGUAGE_COOKIE, parseBlogLanguage } from "@/lib/blog-language"
 import { CONNECTORS_COOKIE, isConnected } from "@/lib/connectors"
 import { getInsights } from "@/lib/post-insights"
 import { subjectOf, topicFromTitle } from "@/lib/draft-generator"
@@ -25,6 +29,12 @@ export default async function EditorPage({
   searchParams: Promise<{
     post?: string
     prompt?: string
+    /** Which field of the post to land on, sent by an audit finding. */
+    fix?: string
+    /** The finding that sent the writer here, so the editor can say why. */
+    from?: string
+    /** Which of that finding's posts this is, so the editor can offer the next. */
+    at?: string
     title?: string
     keywords?: string
     chars?: string
@@ -86,6 +96,14 @@ export default async function EditorPage({
   const hubspotConnected = isConnected(
     cookieStore.get(CONNECTORS_COOKIE)?.value
   )
+  // Chosen once, when the blog was first connected. Undefined here is what
+  // makes connecting from the publish dialog stop to ask for it.
+  const blogLanguage = parseBlogLanguage(
+    cookieStore.get(BLOG_LANGUAGE_COOKIE)?.value
+  )
+  // A post is signed by a person, so the publish dialog opens on whoever is
+  // holding the session and offers the rest of the workspace beside them.
+  const account = findAccount(cookieStore.get(SESSION_COOKIE)?.value)
 
   return (
     <AppShell
@@ -130,6 +148,14 @@ export default async function EditorPage({
             post && { id: post.id, title: post.title, status: post.status }
           }
           hubspotConnected={hubspotConnected}
+          blogLanguage={blogLanguage}
+          authors={ACCOUNTS.map((item) => item.name)}
+          defaultAuthor={account?.name ?? ACCOUNTS[0].name}
+          publishedWith={post?.publish}
+          // An audit finding links here naming the thing that is wrong, so the
+          // editor opens on it rather than leaving the writer to find it.
+          fixField={parseFixField(params.fix)}
+          fixNote={auditNote(params.from, params.at, params.fix)}
           steps={steps}
           relatedPosts={relatedPosts}
           generating={Boolean(generated)}
@@ -137,6 +163,60 @@ export default async function EditorPage({
       </form>
     </AppShell>
   )
+}
+
+/**
+ * What the audit sent the writer here to do.
+ *
+ * The job's title is the instruction — "Write the missing summary lines" —
+ * where the finding says what is wrong. A highlighted field with no words on
+ * it only answers "which one", and the reader still has to remember why they
+ * clicked.
+ */
+function auditNote(
+  findingId: string | undefined,
+  at: string | undefined,
+  fix: string | undefined
+) {
+  const finding = findingId
+    ? FINDINGS.find((entry) => entry.id === findingId)
+    : undefined
+  if (!finding || finding.scope.kind !== "blogger") {
+    return undefined
+  }
+
+  const targets = finding.scope.targets ?? []
+  const position = Number(at)
+  const index = Number.isInteger(position) ? position : 0
+  const next = targets[index + 1]
+
+  return {
+    action: jobForFinding(finding.id)?.title ?? finding.title,
+    reason: finding.detail,
+    // Where this post sits in the set the finding covers, and where the next
+    // one is — a finding about three posts is one job, and the editor is where
+    // it gets worked through rather than the dashboard.
+    step:
+      targets.length > 1 ? { at: index + 1, of: targets.length } : undefined,
+    next: next
+      ? {
+          title: next.title,
+          href: `/editor?post=${encodeURIComponent(next.postId)}${
+            fix ? `&fix=${fix}` : ""
+          }&from=${encodeURIComponent(finding.id)}&at=${index + 1}`,
+        }
+      : undefined,
+  }
+}
+
+/** Only the fields the publish dialog can actually land on. */
+function parseFixField(value: string | undefined) {
+  return value === "meta" ||
+    value === "image" ||
+    value === "tags" ||
+    value === "body"
+    ? value
+    : undefined
 }
 
 // Posts already in the workspace that share the subject of the draft. Real

@@ -13,11 +13,15 @@ import type { BodyView } from "@/lib/preferences"
 export function SettingsButton({
   defaultBodyView,
   connectedIds,
+  blogLanguage,
+  auditCompany,
   accounts,
   currentEmail,
 }: {
   defaultBodyView: BodyView
   connectedIds: string[]
+  blogLanguage?: string
+  auditCompany?: string
   accounts: Account[]
   currentEmail: string
 }) {
@@ -39,6 +43,8 @@ export function SettingsButton({
         onOpenChange={setOpen}
         defaultBodyView={defaultBodyView}
         connectedIds={connectedIds}
+        blogLanguage={blogLanguage}
+        auditCompany={auditCompany}
         accounts={accounts}
         currentEmail={currentEmail}
       />

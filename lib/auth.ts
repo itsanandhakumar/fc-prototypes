@@ -31,7 +31,15 @@ export const ACCOUNTS: Account[] = [
 
 export const DEMO_PASSWORD = "forward"
 
-export const HOME_ROUTE = "/blogger"
+/**
+ * Where signing in lands, and where the proxy sends anyone already signed in
+ * who asks for the login screen.
+ *
+ * Audit rather than Blogger: it is the page that says what needs doing, and
+ * the other two are where the doing happens. Arriving at the work before the
+ * brief is the wrong way round.
+ */
+export const HOME_ROUTE = "/audit"
 export const LOGIN_ROUTE = "/"
 
 export function findAccount(email: string | undefined): Account | undefined {

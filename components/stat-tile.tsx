@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ChevronRight, TrendingDown, TrendingUp } from "lucide-react"
 
-import { ActivityBars } from "@/components/socials/activity-bars"
+import { ActivityBars } from "@/components/activity-bars"
 import { Card } from "@/components/ui/card"
 import {
   Dialog,

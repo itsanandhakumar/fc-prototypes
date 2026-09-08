@@ -3,7 +3,12 @@
 import * as React from "react"
 import { Plus } from "lucide-react"
 
-import { connectPlatform, disconnectPlatform } from "@/app/connector-actions"
+import {
+  connectBlogDestination,
+  connectPlatform,
+  disconnectPlatform,
+} from "@/app/connector-actions"
+import { BlogLanguageDialog } from "@/components/blog-language-dialog"
 import { PlatformGlyph } from "@/components/editor/platform-glyph"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,10 +17,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { blogLanguageName } from "@/lib/blog-language"
 import {
   BLOG_DESTINATIONS,
+  findBlogDestination,
   PLATFORMS,
   SOCIAL_PLATFORM_IDS,
+  type BlogDestination,
 } from "@/lib/connectors"
 
 // The two kinds of connection are kept apart because they belong to different
@@ -25,7 +33,7 @@ import {
 type Kind = "blog" | "social"
 
 /** Both kinds flattened to what the list actually draws. */
-type Connection = { id: string; name: string; subtitle: string }
+type Connection = { id: string; name: string; subtitle: string; note?: string }
 
 const GROUPS: Array<{ kind: Kind; heading: string; hint: string }> = [
   {
@@ -40,12 +48,15 @@ const GROUPS: Array<{ kind: Kind; heading: string; hint: string }> = [
   },
 ]
 
-function connectionsOf(kind: Kind): Connection[] {
+function connectionsOf(kind: Kind, blogLanguage?: string): Connection[] {
   if (kind === "blog") {
     return BLOG_DESTINATIONS.map((destination) => ({
       id: destination.id,
       name: destination.name,
       subtitle: destination.account,
+      // Answered once when the blog was connected, and shown here because
+      // otherwise the answer would vanish the moment it was given.
+      note: blogLanguageName(blogLanguage),
     }))
   }
 
@@ -107,7 +118,9 @@ function ConnectorGroup({
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-xs font-medium">{item.name}</span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {item.subtitle}
+                    {item.note
+                      ? `${item.subtitle} · ${item.note}`
+                      : item.subtitle}
                   </span>
                 </div>
               </div>
@@ -167,13 +180,34 @@ export function ConnectorList({
   /** Narrows the panel to one group, for a dialog that is only about that
       one — the editor asking for a blog has no business offering X. */
   only,
+  /** The blog's language, or undefined if it has never been chosen — which is
+      what makes connecting a blog stop to ask for it. */
+  blogLanguage,
 }: {
   connectedIds: string[]
   only?: Kind
+  blogLanguage?: string
 }) {
   const [pending, startPending] = React.useTransition()
+  // The blog waiting on a language before it is connected. Null the rest of
+  // the time, which is every connection after the first.
+  const [asking, setAsking] = React.useState<BlogDestination | null>(null)
 
   const groups = only ? GROUPS.filter((group) => group.kind === only) : GROUPS
+
+  function connect(id: string) {
+    const destination = findBlogDestination(id)
+
+    // A blog whose language nobody has chosen yet is the one case connecting
+    // is not a single click: the answer has to come with the connection, so
+    // the dialog is asked first and does the connecting itself.
+    if (destination && !blogLanguage) {
+      setAsking(destination)
+      return
+    }
+
+    startPending(async () => connectPlatform(id))
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -182,15 +216,36 @@ export function ConnectorList({
           key={group.kind}
           heading={group.heading}
           hint={group.hint}
-          connections={connectionsOf(group.kind)}
+          connections={connectionsOf(group.kind, blogLanguage)}
           connectedIds={connectedIds}
           pending={pending}
-          onConnect={(id) => startPending(async () => connectPlatform(id))}
+          onConnect={connect}
           onDisconnect={(id) =>
             startPending(async () => disconnectPlatform(id))
           }
         />
       ))}
+
+      <BlogLanguageDialog
+        destination={asking}
+        open={Boolean(asking)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAsking(null)
+          }
+        }}
+        pending={pending}
+        onConfirm={(languageCode) => {
+          const destination = asking
+          if (!destination) {
+            return
+          }
+          startPending(async () => {
+            await connectBlogDestination(destination.id, languageCode)
+            setAsking(null)
+          })
+        }}
+      />
     </div>
   )
 }

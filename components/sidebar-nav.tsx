@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { PenLine, Share2 } from "lucide-react"
+import { ClipboardCheck, PenLine, Share2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -10,6 +10,12 @@ import { cn } from "@/lib/utils"
 // part of Blogger even though its route does not say so, so matching on the
 // href alone would leave the sidebar looking unselected mid-edit.
 const SECTIONS = [
+  {
+    href: "/audit",
+    label: "Audit",
+    icon: ClipboardCheck,
+    owns: (path: string) => path.startsWith("/audit"),
+  },
   {
     href: "/blogger",
     label: "Blogger",

@@ -1,4 +1,5 @@
 import { blogPosts, type BlogPost } from "@/lib/blog-data"
+import type { PublishSettings } from "@/lib/blog-publish"
 import type { DraftBrief } from "@/lib/draft-generator"
 import { slugify } from "@/lib/slug"
 
@@ -49,12 +50,16 @@ export function publishPost({
   title,
   body,
   brief,
+  publish,
 }: {
   id?: string
   title: string
   body: string
   /** The brief the draft came from, kept with the post. */
   brief?: DraftBrief
+  /** What the publish dialog was settled on, kept so the next publish of this
+      post opens on the same answers. */
+  publish?: PublishSettings
 }): BlogPost {
   const existing = getPost(id)
 
@@ -65,6 +70,7 @@ export function publishPost({
     status: "Published",
     updatedMinutesAgo: 0,
     brief: brief ?? existing?.brief,
+    publish: publish ?? existing?.publish,
   }
 
   posts = [published, ...posts.filter((post) => post.id !== published.id)]

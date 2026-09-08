@@ -3,7 +3,7 @@ import {
   ImpressionsDetail,
   StreakDetail,
 } from "@/components/socials/metric-detail"
-import { StatTile } from "@/components/socials/stat-tile"
+import { StatTile } from "@/components/stat-tile"
 import {
   formatCount,
   percentChange,

@@ -1,6 +1,7 @@
 // Mock content for the prototype. `updatedMinutesAgo` is a fixed offset rather
 // than a real timestamp so the server and client render the same string.
 
+import type { PublishSettings } from "@/lib/blog-publish"
 import { generateBody, type DraftBrief } from "@/lib/draft-generator"
 
 export type PostStatus = "Published" | "Draft"
@@ -14,6 +15,10 @@ export type BlogPost = {
   /** The instructions this draft was written from, kept so the editor can
       always show how the post was made. */
   brief?: DraftBrief
+  /** What it was last published with, so publishing it again opens on those
+      answers rather than working them out from scratch. Absent until it has
+      been published at least once. */
+  publish?: PublishSettings
 }
 
 // Each entry's `body` is the post's own opening — the part worth writing by

@@ -181,3 +181,66 @@
     @apply font-sans;
   }
 }
+
+/* Printing a report.
+ *
+ * The report lives in a dialog, which Base UI portals to a div at the end of
+ * body — so paper is made by hiding every other child of body outright and
+ * letting the dialog flow as the page. Hiding by visibility instead leaves the
+ * app's boxes holding their space, which pushed the report off the sheet.
+ *
+ * The dialog then has to stop behaving like a dialog: no fixed position, no
+ * centring transform, no height cap, and no internal scrolling — a scroll box
+ * on paper prints one screenful and drops the rest. */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body > *:not([data-slot="dialog-portal"]) {
+    display: none !important;
+  }
+
+  [data-slot="dialog-overlay"] {
+    display: none !important;
+  }
+
+  [data-slot="dialog-content"] {
+    position: static !important;
+    /* Tailwind centres this with the `translate` property rather than
+       `transform`, so clearing transform alone leaves the dialog pulled half
+       its own size up and to the left — off the sheet. */
+    transform: none !important;
+    /* Tailwind v4 centres this with the `translate` property, built from two
+       custom properties. Overriding `translate` itself does not take, so the
+       values it is built from are cleared instead. */
+    --tw-translate-x: 0 !important;
+    --tw-translate-y: 0 !important;
+    translate: none !important;
+    inset: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  [data-slot="dialog-content"] .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+    /* The tint is there to make cards read as objects on screen. On paper the
+       sheet is already the ground, and it would print as a grey wash. */
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Controls do nothing on paper. */
+  [data-print-hidden],
+  [data-slot="dialog-close"] {
+    display: none !important;
+  }
+}

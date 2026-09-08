@@ -2,10 +2,19 @@
 
 import * as React from "react"
 import { useTheme } from "next-themes"
-import { LogOut, Palette, PenLine, Plug, UserRound } from "lucide-react"
+import {
+  ClipboardCheck,
+  LogOut,
+  Palette,
+  PenLine,
+  Plug,
+  UserRound,
+} from "lucide-react"
 
+import { setAuditCompany } from "@/app/audit-actions"
 import { logout } from "@/app/login-actions"
 import { setDefaultBodyView } from "@/app/settings-actions"
+import { CompanyField } from "@/components/audit/company-field"
 import { ConnectorList } from "@/components/connector-list"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,6 +31,7 @@ const SECTIONS = [
   { id: "account", label: "Account", icon: UserRound },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "editor", label: "Editor", icon: PenLine },
+  { id: "audit", label: "Audit", icon: ClipboardCheck },
   { id: "connectors", label: "Connectors", icon: Plug },
 ] as const
 
@@ -129,6 +139,36 @@ function AccountSection({
   )
 }
 
+/**
+ * The account's own company, which every figure in Audit is about.
+ *
+ * Here rather than on the page it affects: changing it means the dashboard is
+ * about a different company, which is a decision about the account rather than
+ * a control to reach for mid-audit. Audit asks for it once on first use and
+ * then never again — this is the only way back to the answer.
+ */
+function AuditSection({ company }: { company?: string }) {
+  const [pending, startPending] = React.useTransition()
+
+  return (
+    <div className="flex max-w-sm flex-col gap-4">
+      <CompanyField
+        id="settings-audit-company"
+        label="Your company"
+        initialValue={company ?? ""}
+        submitLabel="Save"
+        pending={pending}
+        onSubmit={(site) => startPending(async () => setAuditCompany(site))}
+      />
+
+      <p className="text-xs text-muted-foreground">
+        Audit&rsquo;s scores and findings are all about this site. Runs against
+        other companies stay in the history and do not change it.
+      </p>
+    </div>
+  )
+}
+
 // Controlled from the outside: the way in is the account menu at the foot of
 // the sidebar, so the dialog carries no trigger of its own.
 export function SettingsDialog({
@@ -136,6 +176,8 @@ export function SettingsDialog({
   onOpenChange,
   defaultBodyView,
   connectedIds,
+  blogLanguage,
+  auditCompany,
   accounts,
   currentEmail,
 }: {
@@ -143,6 +185,10 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void
   defaultBodyView: BodyView
   connectedIds: string[]
+  /** The blog's language, if it has been chosen. */
+  blogLanguage?: string
+  /** The company Audit reports on, if it has been named. */
+  auditCompany?: string
   accounts: Account[]
   currentEmail: string
 }) {
@@ -227,9 +273,16 @@ export function SettingsDialog({
               </div>
             ) : null}
 
+            {section === "audit" ? (
+              <AuditSection company={auditCompany} />
+            ) : null}
+
             {section === "connectors" ? (
               <div className="flex flex-col gap-4">
-                <ConnectorList connectedIds={connectedIds} />
+                <ConnectorList
+                  connectedIds={connectedIds}
+                  blogLanguage={blogLanguage}
+                />
               </div>
             ) : null}
           </div>
